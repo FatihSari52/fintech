@@ -1,0 +1,246 @@
+{% extends 'finance/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="text-center mb-5">Dashboard</h1>
+
+    <!-- Portföy Özeti -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Toplam Portföy Değeri</h5>
+                    <h3>{{ portfolio.total_value }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Hisse Sayısı</h5>
+                    <h3>{{ portfolio.stock_count }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Son Güncelleme</h5>
+                    <h3>{{ portfolio.last_update }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Hızlı İşlemler</h5>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addStockModal">
+                            <i class="fas fa-plus"></i> Hisse Ekle
+                        </button>
+                        <a href="{% url 'analysis' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-chart-line"></i> Analiz Yap
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Portföy Dağılımı -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Portföy Dağılımı</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="portfolioChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portföy Performansı -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Portföy Performansı</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portföy Varlıkları -->
+    <div class="card">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Portföy Varlıkları</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Sembol</th>
+                            <th>Adet</th>
+                            <th>Ortalama Maliyet</th>
+                            <th>Güncel Fiyat</th>
+                            <th>Toplam Değer</th>
+                            <th>Kar/Zarar</th>
+                            <th>Kar/Zarar %</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for holding in portfolio.holdings %}
+                        <tr>
+                            <td>{{ holding.symbol }}</td>
+                            <td>{{ holding.shares }}</td>
+                            <td>{{ holding.average_cost }}</td>
+                            <td>{{ holding.current_price }}</td>
+                            <td>{{ holding.total_value }}</td>
+                            <td class="{% if holding.profit_loss >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ holding.profit_loss }}
+                            </td>
+                            <td class="{% if holding.profit_loss_percentage >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ holding.profit_loss_percentage }}%
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'analysis' %}?symbol={{ holding.symbol }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-chart-line"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-danger" onclick="removeHolding('{{ holding.symbol }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hisse Ekleme Modal -->
+<div class="modal fade" id="addStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Hisse Senedi Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addStockForm" method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="symbol" class="form-label">Hisse Senedi Sembolü</label>
+                        <input type="text" class="form-control" id="symbol" name="symbol" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="shares" class="form-label">Adet</label>
+                        <input type="number" class="form-control" id="shares" name="shares" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="average_cost" class="form-label">Ortalama Maliyet</label>
+                        <input type="number" step="0.01" class="form-control" id="average_cost" name="average_cost" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="purchase_date" class="form-label">Alım Tarihi</label>
+                        <input type="date" class="form-control" id="purchase_date" name="purchase_date" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="submit" form="addStockForm" class="btn btn-primary">Ekle</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Portföy dağılımı grafiği
+    var portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
+    var portfolioChart = new Chart(portfolioCtx, {
+        type: 'pie',
+        data: {
+            labels: {{ portfolio.distribution.labels|safe }},
+            datasets: [{
+                data: {{ portfolio.distribution.data|safe }},
+                backgroundColor: [
+                    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b',
+                    '#5a5c69', '#858796', '#6f42c1', '#20c9a6', '#fd7e14'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Performans grafiği
+    var performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    var performanceChart = new Chart(performanceCtx, {
+        type: 'line',
+        data: {
+            labels: {{ portfolio.performance.labels|safe }},
+            datasets: [{
+                label: 'Portföy Değeri',
+                data: {{ portfolio.performance.data|safe }},
+                borderColor: '#4e73df',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+
+    // Hisse senedi silme fonksiyonu
+    function removeHolding(symbol) {
+        if (confirm('Bu hisse senedini portföyünüzden silmek istediğinizden emin misiniz?')) {
+            fetch('{% url "remove_holding" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    symbol: symbol
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Bir hata oluştu: ' + data.error);
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}
+{% endblock %} 

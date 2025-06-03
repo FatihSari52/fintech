@@ -1,149 +1,127 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fintech Borsa Tahmini</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .prediction-card {
-            transition: all 0.3s ease;
-        }
-        .prediction-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        .loading {
-            display: none;
-        }
-        .loading.active {
-            display: block;
-        }
-    </style>
-</head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <h1 class="text-center mb-4">Borsa Tahmin Sistemi</h1>
-                
-                <div class="card prediction-card mb-4">
-                    <div class="card-body">
-                        <form id="predictionForm" class="mb-4">
-                            <div class="mb-3">
-                                <label for="symbol" class="form-label">Hisse Senedi Sembolü</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="symbol" name="symbol" 
-                                           placeholder="Örn: AAPL, MSFT, GOOGL, BTC-USD, EUR=X" required>
-                                    <button type="submit" class="btn btn-primary">Tahmin Et</button>
-                                </div>
-                                <small class="text-muted">
-                                    Kripto para birimleri için: BTC-USD, ETH-USD<br>
-                                    Döviz kurları için: EUR=X, TRY=X, GBP=X
-                                </small>
-                            </div>
-                        </form>
+{% extends 'finance/base.html' %}
 
-                        <div id="loading" class="loading text-center mb-4">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Yükleniyor...</span>
-                            </div>
-                            <p class="mt-2">Veriler analiz ediliyor...</p>
-                        </div>
+{% block content %}
+<!-- Hero Section -->
+<div class="container py-5">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <h1 class="display-4 mb-4">Finansal Analiz ve Tahmin Platformu</h1>
+            <p class="lead mb-4">Yapay zeka destekli hisse senedi analizi ve tahminleri ile yatırım kararlarınızı güçlendirin.</p>
+            <div class="d-flex gap-3">
+                <a href="{% url 'stock_predictor' %}" class="btn btn-primary">Hemen Başla</a>
+                <a href="{% url 'market' %}" class="btn btn-outline-primary">Piyasayı Keşfet</a>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <img src="https://via.placeholder.com/600x400" alt="Finance" class="img-fluid rounded">
+        </div>
+    </div>
+</div>
 
-                        <div id="result" style="display: none;">
-                            <h3 class="mb-4">Tahmin Sonuçları</h3>
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <tr>
-                                        <th class="bg-light">Sembol:</th>
-                                        <td id="resultSymbol" class="fw-bold"></td>
-                                    </tr>
-                                    <tr>
-                                        <th class="bg-light">Son Fiyat:</th>
-                                        <td id="resultLastPrice"></td>
-                                    </tr>
-                                    <tr>
-                                        <th class="bg-light">Yarın için Tahmin:</th>
-                                        <td>
-                                            <span id="resultPredicted"></span>
-                                            <span id="predictionChange" class="ms-2"></span>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <th class="bg-light">Model Doğruluğu (R²):</th>
-                                        <td>
-                                            <span id="resultR2"></span>
-                                            <div class="progress mt-1" style="height: 5px;">
-                                                <div id="r2Progress" class="progress-bar" role="progressbar"></div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </table>
+<!-- Hızlı Arama Bölümü -->
+<div class="container py-5 bg-light">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h3 class="text-center mb-4">Hisse Senedi Analizi</h3>
+                    <form method="get" action="{% url 'stock_predictor' %}" class="row g-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control form-control-lg" 
+                                       name="symbol" placeholder="Hisse senedi sembolü girin (örn: AAPL, MSFT, GOOGL)" 
+                                       required>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="card prediction-card">
-                    <div class="card-body">
-                        <h4>Nasıl Kullanılır?</h4>
-                        <ul>
-                            <li>Hisse senetleri için doğrudan sembol girin (AAPL, MSFT, GOOGL)</li>
-                            <li>Kripto paralar için -USD ekleyin (BTC-USD, ETH-USD)</li>
-                            <li>Döviz kurları için =X ekleyin (EUR=X, TRY=X, GBP=X)</li>
-                        </ul>
-                        <p class="text-muted small">Not: Tahminler geçmiş veriler kullanılarak yapılır ve gelecekteki kesin fiyatları garanti etmez.</p>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Analiz Et</button>
+                        </div>
+                    </form>
+                    <div class="mt-3">
+                        <p class="text-muted text-center mb-0">
+                            Popüler hisseler: 
+                            <a href="{% url 'stock_predictor' %}?symbol=AAPL">AAPL</a>, 
+                            <a href="{% url 'stock_predictor' %}?symbol=MSFT">MSFT</a>, 
+                            <a href="{% url 'stock_predictor' %}?symbol=GOOGL">GOOGL</a>
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const symbol = document.getElementById('symbol').value;
-            const loading = document.getElementById('loading');
-            const result = document.getElementById('result');
-            
-            loading.classList.add('active');
-            result.style.display = 'none';
-            
-            try {
-                const response = await fetch(`/predict/?symbol=${encodeURIComponent(symbol)}`);
-                const data = await response.json();
-                
-                if (data.error) {
-                    alert(data.error);
-                    return;
-                }
+<!-- Özellikler -->
+<div class="container py-5">
+    <h2 class="text-center mb-5">Özellikler</h2>
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-robot fa-3x text-primary mb-3"></i>
+                    <h4>Yapay Zeka Tahminleri</h4>
+                    <p class="text-muted">Gelişmiş makine öğrenmesi modelleri ile fiyat tahminleri yapın.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                    <h4>Teknik Analiz</h4>
+                    <p class="text-muted">RSI, MACD ve Bollinger Bantları gibi teknik göstergeleri kullanın.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-wallet fa-3x text-primary mb-3"></i>
+                    <h4>Portföy Yönetimi</h4>
+                    <p class="text-muted">Yatırımlarınızı takip edin ve performansını analiz edin.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-                document.getElementById('resultSymbol').textContent = data.symbol;
-                document.getElementById('resultLastPrice').textContent = data.last_price;
-                document.getElementById('resultPredicted').textContent = data.predicted_next_day;
-                
-                // Değişim yüzdesi hesapla ve göster
-                const change = ((data.predicted_next_day - data.last_price) / data.last_price) * 100;
-                const changeElement = document.getElementById('predictionChange');
-                changeElement.textContent = `(${change >= 0 ? '+' : ''}${change.toFixed(2)}%)`;
-                changeElement.className = `ms-2 badge ${change >= 0 ? 'bg-success' : 'bg-danger'}`;
-
-                // R² değerini göster ve progress bar'ı güncelle
-                const r2Percent = (data.r2 * 100).toFixed(2);
-                document.getElementById('resultR2').textContent = `${r2Percent}%`;
-                const r2Progress = document.getElementById('r2Progress');
-                r2Progress.style.width = `${r2Percent}%`;
-                r2Progress.className = `progress-bar ${r2Percent > 70 ? 'bg-success' : r2Percent > 40 ? 'bg-warning' : 'bg-danger'}`;
-
-                result.style.display = 'block';
-            } catch (error) {
-                alert('Bir hata oluştu. Lütfen tekrar deneyin.');
-            } finally {
-                loading.classList.remove('active');
-            }
-        });
-    </script>
-</body>
-</html> 
+<!-- Piyasa Özeti -->
+<div class="container py-5">
+    <h2 class="text-center mb-5">Piyasa Özeti</h2>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Sembol</th>
+                    <th>Şirket</th>
+                    <th>Fiyat</th>
+                    <th>Değişim</th>
+                    <th>Hacim</th>
+                    <th>Piyasa Değeri</th>
+                    <th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stock in market_data %}
+                <tr>
+                    <td>{{ stock.symbol }}</td>
+                    <td>{{ stock.company_name }}</td>
+                    <td>${{ stock.price }}</td>
+                    <td class="{% if stock.change > 0 %}text-success{% elif stock.change < 0 %}text-danger{% endif %}">
+                        {% if stock.change > 0 %}↑{% elif stock.change < 0 %}↓{% endif %}
+                        {{ stock.change }}%
+                    </td>
+                    <td>{{ stock.volume }}</td>
+                    <td>${{ stock.market_cap }}</td>
+                    <td>
+                        <a href="{% url 'stock_predictor' %}?symbol={{ stock.symbol }}" 
+                           class="btn btn-sm btn-outline-primary">Analiz Et</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %} 

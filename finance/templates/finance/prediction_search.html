@@ -1,0 +1,76 @@
+{% extends 'finance/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="mb-4">Model ile Hisse Arama ve Tahmin</h2>
+    <form method="get" class="mb-4">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label for="symbol" class="form-label">Hisse Sembolü</label>
+                <input type="text" class="form-control" id="symbol" name="symbol" placeholder="Örn: AAPL" value="{{ symbol|default:'' }}" required>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Tahmin Et</button>
+            </div>
+        </div>
+    </form>
+
+    {% if searched %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="card-title mb-0">{{ symbol }} Tahmin Sonuçları</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table">
+                            <tr>
+                                <td>Güncel Fiyat</td>
+                                <td>{{ current_price }}</td>
+                            </tr>
+                            <tr>
+                                <td>1 Günlük Tahmin</td>
+                                <td>{{ prediction_1d }}</td>
+                            </tr>
+                            <tr>
+                                <td>RSI</td>
+                                <td>{{ rsi }}</td>
+                            </tr>
+                            <tr>
+                                <td>MACD</td>
+                                <td>{{ macd }}</td>
+                            </tr>
+                            <tr>
+                                <td>Bollinger Üst</td>
+                                <td>{{ upper_band }}</td>
+                            </tr>
+                            <tr>
+                                <td>Bollinger Alt</td>
+                                <td>{{ lower_band }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <div id="priceChart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if searched %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    var priceData = {{ price_data|safe }};
+    var layout = {
+        title: '{{ symbol }} Fiyat Grafiği',
+        xaxis: { title: 'Tarih' },
+        yaxis: { title: 'Fiyat' }
+    };
+    Plotly.newPlot('priceChart', [priceData], layout);
+</script>
+{% endif %}
+{% endblock %} 

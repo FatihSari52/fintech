@@ -1,4 +1,4 @@
-#!C:\Users\sfati\OneDrive\Desktop\fintech_project\venv\Scripts\python.exe
+#!C:\Users\demir\OneDrive\Masaüstü\fintech\venv\Scripts\python.exe
 
 import datetime
 import os

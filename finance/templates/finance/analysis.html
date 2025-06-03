@@ -1,0 +1,201 @@
+{% extends 'finance/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Hisse Senedi Bilgileri -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="card-title mb-0">{{ symbol }} Analizi</h4>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="addToWatchlist()">
+                            <i class="fas fa-star"></i> İzleme Listesine Ekle
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Fiyat Bilgileri</h5>
+                            <table class="table">
+                                <tr>
+                                    <td>Güncel Fiyat</td>
+                                    <td>{{ current_price }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Günlük Değişim</td>
+                                    <td class="{% if daily_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ daily_change }}%
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>Hacim</td>
+                                    <td>{{ volume }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Tahmin Bilgileri</h5>
+                            <table class="table">
+                                <tr>
+                                    <td>1 Günlük Tahmin</td>
+                                    <td>{{ prediction_1d }}</td>
+                                </tr>
+                                <tr>
+                                    <td>7 Günlük Tahmin</td>
+                                    <td>{{ prediction_7d }}</td>
+                                </tr>
+                                <tr>
+                                    <td>30 Günlük Tahmin</td>
+                                    <td>{{ prediction_30d }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teknik Göstergeler -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Teknik Göstergeler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>RSI (14)</h6>
+                                    <h3 class="{% if rsi > 70 %}text-danger{% elif rsi < 30 %}text-success{% endif %}">
+                                        {{ rsi|floatformat:2 }}
+                                    </h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>MACD</h6>
+                                    <h3 class="{% if macd > 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ macd|floatformat:2 }}
+                                    </h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6>Bollinger Bantları</h6>
+                                    <h3>{{ bb_position|floatformat:2 }}</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fiyat Grafiği -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Fiyat Grafiği</h5>
+                </div>
+                <div class="card-body">
+                    <div id="priceChart"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Alım/Satım Sinyalleri -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Alım/Satım Sinyalleri</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for signal in signals %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ signal.name }}</h6>
+                                    <small class="text-muted">{{ signal.description }}</small>
+                                </div>
+                                <span class="badge {% if signal.signal == 'BUY' %}bg-success{% elif signal.signal == 'SELL' %}bg-danger{% else %}bg-warning{% endif %}">
+                                    {{ signal.signal }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Performansı -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Model Performansı</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <span>Doğruluk</span>
+                                <span>{{ accuracy|floatformat:2 }}%</span>
+                            </div>
+                        </div>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <span>Ortalama Hata</span>
+                                <span>{{ mae|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <span>R² Skoru</span>
+                                <span>{{ r2|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    // Fiyat grafiği
+    var priceData = {{ price_data|safe }};
+    var layout = {
+        title: '{{ symbol }} Fiyat Grafiği',
+        xaxis: { title: 'Tarih' },
+        yaxis: { title: 'Fiyat' }
+    };
+    Plotly.newPlot('priceChart', [priceData], layout);
+
+    // İzleme listesine ekleme fonksiyonu
+    function addToWatchlist() {
+        fetch('{% url "add_to_watchlist" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                symbol: '{{ symbol }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Hisse senedi izleme listesine eklendi!');
+            } else {
+                alert('Bir hata oluştu: ' + data.error);
+            }
+        });
+    }
+</script>
+{% endblock %}
+{% endblock %} 

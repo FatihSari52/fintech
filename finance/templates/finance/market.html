@@ -1,0 +1,115 @@
+{% extends 'finance/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Piyasa Özeti -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">S&P 500</h5>
+                    <h3 class="{% if sp500_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ sp500_value }}
+                        <small>({{ sp500_change }}%)</small>
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">NASDAQ</h5>
+                    <h3 class="{% if nasdaq_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ nasdaq_value }}
+                        <small>({{ nasdaq_change }}%)</small>
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">DOW JONES</h5>
+                    <h3 class="{% if dow_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ dow_value }}
+                        <small>({{ dow_change }}%)</small>
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Popüler Hisseler -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Popüler Hisseler</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Sembol</th>
+                            <th>Şirket</th>
+                            <th>Fiyat</th>
+                            <th>Değişim</th>
+                            <th>Hacim</th>
+                            <th>Piyasa Değeri</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in market_data %}
+                        <tr>
+                            <td>{{ stock.symbol }}</td>
+                            <td>{{ stock.company_name }}</td>
+                            <td>{{ stock.price }}</td>
+                            <td class="{% if stock.change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ stock.change }}%
+                            </td>
+                            <td>{{ stock.volume }}</td>
+                            <td>{{ stock.market_cap }}</td>
+                            <td>
+                                <a href="{% url 'analysis' %}?symbol={{ stock.symbol }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-chart-line"></i> Analiz
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Piyasa Haberleri -->
+    <div class="card">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Piyasa Haberleri</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for news in market_news %}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        {% if news.image %}
+                        <img src="{{ news.image }}" class="card-img-top" alt="{{ news.title }}">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ news.title }}</h5>
+                            <p class="card-text">{{ news.description }}</p>
+                            <p class="text-muted">
+                                <small>{{ news.source }} - {{ news.published_at }}</small>
+                            </p>
+                            <a href="{{ news.url }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                                Devamını Oku
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
