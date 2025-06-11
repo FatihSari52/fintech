@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_http_methods
 from .forms import UserRegistrationForm, UserLoginForm, StockHoldingForm, WatchlistForm
 from .models import Portfolio, StockHolding, Watchlist, AnalysisHistory
 from sklearn.linear_model import LinearRegression
@@ -17,6 +17,11 @@ import plotly.graph_objects as go
 import plotly.express as px
 import json
 from django.views.decorators.csrf import csrf_exempt
+from ta.trend import SMAIndicator, EMAIndicator, MACD
+from ta.momentum import RSIIndicator
+import requests
+from bs4 import BeautifulSoup
+import random
 
 def calculate_rsi(prices, period=14):
     delta = prices.diff()
@@ -33,6 +38,7 @@ def calculate_macd(prices, fast=12, slow=26, signal=9):
     return macd, signal_line
 
 def calculate_bollinger_bands(prices, period=20, std_dev=2):
+    """Bollinger Bantlarını hesaplar"""
     sma = prices.rolling(window=period).mean()
     std = prices.rolling(window=period).std()
     upper_band = sma + (std * std_dev)
@@ -173,6 +179,108 @@ def create_performance_chart(holdings):
     
     return fig.to_json()
 
+def get_bloomberg_news():
+    try:
+        url = "https://www.bloomberg.com/markets"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        print("Bloomberg haberleri alınıyor...")
+        response = requests.get(url, headers=headers)
+        print(f"Bloomberg yanıt kodu: {response.status_code}")
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        news_items = []
+        articles = soup.find_all('article', class_='story-list-story')[:2]  # İlk 2 haber
+        print(f"Bulunan Bloomberg haber sayısı: {len(articles)}")
+        
+        for article in articles:
+            title = article.find('h3')
+            if title:
+                title = title.text.strip()
+                link = article.find('a')['href']
+                if not link.startswith('http'):
+                    link = 'https://www.bloomberg.com' + link
+                news_items.append({
+                    'title': title,
+                    'description': 'Bloomberg Markets',
+                    'source': 'Bloomberg',
+                    'published_at': 'Son 1 saat',
+                    'url': link
+                })
+                print(f"Bloomberg haber eklendi: {title}")
+        
+        return news_items
+    except Exception as e:
+        print(f"Bloomberg haberleri alınırken hata: {str(e)}")
+        return []
+
+def get_cnbc_news():
+    try:
+        url = "https://www.cnbc.com/markets/"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        print("CNBC haberleri alınıyor...")
+        response = requests.get(url, headers=headers)
+        print(f"CNBC yanıt kodu: {response.status_code}")
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        news_items = []
+        articles = soup.find_all('div', class_='Card-titleContainer')[:2]  # İlk 2 haber
+        print(f"Bulunan CNBC haber sayısı: {len(articles)}")
+        
+        for article in articles:
+            title = article.find('a')
+            if title:
+                title = title.text.strip()
+                link = title['href']
+                if not link.startswith('http'):
+                    link = 'https://www.cnbc.com' + link
+                news_items.append({
+                    'title': title,
+                    'description': 'CNBC Markets',
+                    'source': 'CNBC',
+                    'published_at': 'Son 1 saat',
+                    'url': link
+                })
+                print(f"CNBC haber eklendi: {title}")
+        
+        return news_items
+    except Exception as e:
+        print(f"CNBC haberleri alınırken hata: {str(e)}")
+        return []
+
+def get_yahoo_news():
+    try:
+        print("Yahoo Finance haberleri alınıyor...")
+        # Popüler hisse senetleri için haberleri al
+        symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA']
+        news_items = []
+        
+        for symbol in symbols:
+            try:
+                stock = yf.Ticker(symbol)
+                news = stock.news[:2]  # Her hisse için ilk 2 haber
+                
+                for item in news:
+                    news_items.append({
+                        'title': item['title'],
+                        'description': f"{symbol} - {item.get('publisher', 'Yahoo Finance')}",
+                        'source': 'Yahoo Finance',
+                        'published_at': datetime.fromtimestamp(item['providerPublishTime']).strftime('%Y-%m-%d %H:%M'),
+                        'url': item['link']
+                    })
+                    print(f"Yahoo Finance haber eklendi: {item['title']}")
+            except Exception as e:
+                print(f"{symbol} için haber alınırken hata: {str(e)}")
+                continue
+        
+        return news_items
+    except Exception as e:
+        print(f"Yahoo Finance haberleri alınırken hata: {str(e)}")
+        return []
+
 @login_required
 def market_view(request):
     # Örnek piyasa verileri
@@ -194,30 +302,8 @@ def market_view(request):
         'dow_change': -0.25
     }
     
-    # Örnek piyasa haberleri
-    market_news = [
-        {
-            'title': 'Fed Faiz Kararını Açıkladı',
-            'description': 'Federal Reserve, faiz oranlarını değiştirmedi ve piyasa beklentilerini karşıladı.',
-            'source': 'Bloomberg',
-            'published_at': '2 saat önce',
-            'url': '#'
-        },
-        {
-            'title': 'Apple Yeni Ürünlerini Tanıttı',
-            'description': 'Apple, Vision Pro başlığı ve yeni MacBook modellerini tanıttı.',
-            'source': 'CNBC',
-            'published_at': '5 saat önce',
-            'url': '#'
-        },
-        {
-            'title': 'Tesla Üretim Hedeflerini Açıkladı',
-            'description': 'Tesla, 2024 yılı için 2 milyon araç üretim hedefini açıkladı.',
-            'source': 'Reuters',
-            'published_at': '8 saat önce',
-            'url': '#'
-        }
-    ]
+    # Yahoo Finance haberlerini al
+    market_news = get_yahoo_news()
     
     context = {
         'market_data': market_data,
@@ -231,25 +317,93 @@ def portfolio_view(request):
     portfolio = request.user.portfolio
     holdings = portfolio.holdings.all()
     
+    # Portföy değerlerini hesapla
+    total_value = 0
+    total_cost = 0
+    total_profit_loss = 0
+    holdings_data = []
+    
+    for holding in holdings:
+        try:
+            # Güncel fiyat bilgisini al
+            stock = yf.Ticker(holding.symbol)
+            current_price = stock.info.get('currentPrice', 0)
+            
+            # Alım tarihindeki fiyatı al
+            purchase_date = holding.purchase_date
+            hist = stock.history(start=purchase_date, end=purchase_date + timedelta(days=1))
+            purchase_price = hist['Close'].iloc[0] if not hist.empty else holding.average_cost
+            
+            # Değerleri hesapla
+            current_value = holding.shares * current_price
+            cost_basis = holding.shares * purchase_price
+            profit_loss = current_value - cost_basis
+            profit_loss_percentage = (profit_loss / cost_basis) * 100 if cost_basis > 0 else 0
+            
+            # Toplam değerleri güncelle
+            total_value += current_value
+            total_cost += cost_basis
+            total_profit_loss += profit_loss
+            
+            # Hisse verilerini listeye ekle
+            holdings_data.append({
+                'symbol': holding.symbol,
+                'shares': holding.shares,
+                'average_cost': holding.average_cost,
+                'purchase_date': holding.purchase_date.strftime('%Y-%m-%d'),
+                'current_price': current_price,
+                'current_value': current_value,
+                'profit_loss': profit_loss,
+                'profit_loss_percentage': profit_loss_percentage
+            })
+        except Exception as e:
+            print(f"Hisse senedi verisi alınırken hata: {str(e)}")
+            continue
+    
     # Portföy dağılımı için veri hazırlama
     distribution = {
-        'labels': [holding.symbol for holding in holdings],
-        'data': [float(holding.shares * holding.average_cost) for holding in holdings]
+        'labels': [holding['symbol'] for holding in holdings_data],
+        'data': [holding['current_value'] for holding in holdings_data]
     }
     
-    # Performans verisi için örnek veri
+    # Performans verisi için son 30 günlük veri
+    performance_data = []
+    dates = pd.date_range(end=datetime.now(), periods=30)
+    
+    for date in dates:
+        daily_value = 0
+        for holding in holdings_data:
+            try:
+                stock = yf.Ticker(holding['symbol'])
+                hist = stock.history(start=date, end=date + timedelta(days=1))
+                if not hist.empty:
+                    price = hist['Close'].iloc[0]
+                    daily_value += holding['shares'] * price
+            except:
+                continue
+        performance_data.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'value': daily_value
+        })
+    
     performance = {
-        'labels': [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)],
-        'data': [1000 + i * 10 for i in range(30)]
+        'labels': [data['date'] for data in performance_data],
+        'data': [data['value'] for data in performance_data]
     }
+    
+    # Günlük değişim hesaplama
+    daily_change = 0
+    if len(performance_data) >= 2 and performance_data[-2]['value'] > 0:
+        daily_change = ((performance_data[-1]['value'] - performance_data[-2]['value']) / performance_data[-2]['value']) * 100
     
     context = {
         'portfolio': {
-            'total_value': sum(float(h.shares * h.average_cost) for h in holdings),
-            'daily_change': 1.5,  # Örnek değer
-            'total_profit_loss': 500,  # Örnek değer
-            'profit_loss_percentage': 5.0,  # Örnek değer
-            'holdings': holdings,
+            'total_value': total_value,
+            'total_cost': total_cost,
+            'daily_change': daily_change,
+            'total_profit_loss': total_profit_loss,
+            'profit_loss_percentage': (total_profit_loss / total_cost) * 100 if total_cost > 0 else 0,
+            'holdings': holdings_data,
             'distribution': distribution,
             'performance': performance
         }
@@ -485,99 +639,81 @@ def prediction_search_view(request):
             messages.error(request, f'Hata: {str(e)}')
     return render(request, 'finance/prediction_search.html', context)
 
-@login_required
+@login_required(login_url='login')
 def stock_predictor_view(request):
-    symbol = request.GET.get('symbol', '').upper()
+    symbol = request.GET.get('symbol', 'AAPL')
     searched = False
-    context = {
-        'symbol': symbol,
-        'searched': searched
-    }
     
     if symbol:
+        searched = True
         try:
             # Hisse senedi verilerini al
             stock = yf.Ticker(symbol)
-            hist = stock.history(period='1y')
+            info = stock.info
             
-            if hist.empty:
-                messages.error(request, f"{symbol} için veri bulunamadı.")
-                return render(request, 'finance/stock_predictor.html', context)
+            # Geçmiş verileri al
+            df = stock.history(period='1y')
+            
+            if df.empty:
+                raise Exception('Hisse senedi verisi bulunamadı.')
+            
+            # Güncel fiyat ve değişim
+            current_price = df['Close'].iloc[-1]
+            daily_change = ((current_price - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
             
             # Teknik göstergeleri hesapla
-            close_prices = hist['Close'].values
-            rsi = calculate_rsi(close_prices)
-            macd, signal = calculate_macd(close_prices)
-            upper_band, lower_band = calculate_bollinger_bands(close_prices)
+            rsi = calculate_rsi(df['Close']).iloc[-1]
+            macd, signal = calculate_macd(df['Close'])
+            upper_band, lower_band = calculate_bollinger_bands(df['Close'])
             
             # Tahminleri hesapla
-            prediction_1d = predict_price(close_prices, 1)
-            prediction_7d = predict_price(close_prices, 7)
-            prediction_30d = predict_price(close_prices, 30)
+            prices = df['Close'].values.reshape(-1, 1)
+            prediction_1d = predict_price(prices, 1)
+            prediction_7d = predict_price(prices, 7)
             
-            # Model performans metriklerini hesapla
-            accuracy, r2, mae = calculate_model_metrics(close_prices)
-            
-            # Alım/satım sinyallerini oluştur
-            signals = [
-                {
-                    'name': 'RSI',
-                    'signal': 'BUY' if rsi < 30 else 'SELL' if rsi > 70 else 'HOLD',
-                    'description': f'RSI değeri: {rsi:.2f}'
-                },
-                {
-                    'name': 'MACD',
-                    'signal': 'BUY' if macd[-1] > signal[-1] else 'SELL',
-                    'description': f'MACD: {macd[-1]:.2f}, Sinyal: {signal[-1]:.2f}'
-                },
-                {
-                    'name': 'Bollinger Bands',
-                    'signal': 'BUY' if close_prices[-1] < lower_band[-1] else 'SELL' if close_prices[-1] > upper_band[-1] else 'HOLD',
-                    'description': f'Fiyat: {close_prices[-1]:.2f}, Üst Bant: {upper_band[-1]:.2f}, Alt Bant: {lower_band[-1]:.2f}'
-                }
-            ]
+            # Model metriklerini hesapla
+            accuracy, mae, r2 = calculate_model_metrics(prices)
             
             # Grafik verilerini hazırla
             price_data = {
-                'x': hist.index.strftime('%Y-%m-%d').tolist(),
-                'y': hist['Close'].tolist(),
+                'x': df.index.strftime('%Y-%m-%d').tolist(),
+                'y': df['Close'].tolist(),
                 'type': 'scatter',
                 'mode': 'lines',
                 'name': 'Fiyat'
             }
             
-            # Tahmin tarihini hesapla
-            last_date = hist.index[-1]
-            prediction_date = (last_date + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+            context = {
+                'symbol': symbol,
+                'company_name': info.get('longName', symbol),
+                'current_price': current_price,
+                'change': daily_change,
+                'rsi': round(rsi, 2),
+                'macd': round(macd.iloc[-1], 2),
+                'upper_band': round(upper_band.iloc[-1], 2),
+                'lower_band': round(lower_band.iloc[-1], 2),
+                'prediction_1d': round(prediction_1d, 2),
+                'prediction_7d': round(prediction_7d, 2),
+                'accuracy': round(accuracy, 2),
+                'mae': round(mae, 2),
+                'r2': round(r2, 2),
+                'price_data': json.dumps(price_data),
+                'searched': searched
+            }
             
-            context.update({
-                'searched': True,
-                'current_price': close_prices[-1],
-                'rsi': rsi,
-                'macd': macd[-1],
-                'upper_band': upper_band[-1],
-                'lower_band': lower_band[-1],
-                'prediction_1d': prediction_1d,
-                'prediction_7d': prediction_7d,
-                'prediction_30d': prediction_30d,
-                'accuracy': accuracy,
-                'r2': r2,
-                'mae': mae,
-                'signals': signals,
-                'price_data': price_data,
-                'prediction_date': prediction_date
-            })
+            return render(request, 'finance/stock_predictor.html', context)
             
         except Exception as e:
-            messages.error(request, f"Analiz sırasında bir hata oluştu: {str(e)}")
+            messages.error(request, f"Hisse senedi verisi alınırken bir hata oluştu: {str(e)}")
+            return redirect('market')
     
-    return render(request, 'finance/stock_predictor.html', context)
+    return render(request, 'finance/stock_predictor.html', {'searched': searched})
 
 def predict_price(prices, days):
     """Hisse senedi fiyatını tahmin eder"""
     try:
         # Veriyi hazırla
-        df = pd.DataFrame({'Close': prices})
+        df = pd.DataFrame({'Close': prices.flatten()})
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['RSI'] = calculate_rsi(df['Close'])
@@ -591,44 +727,44 @@ def predict_price(prices, days):
         # Özellikler ve hedef değişken
         features = ['Close', 'MA5', 'MA20', 'RSI', 'MACD', 'Signal']
         X = df[features].values
-        y = df['Close'].shift(-1).dropna().values
-        X = X[:-1]
+        y = df['Close'].values
         
         # Veriyi ölçeklendir
-        scaler = StandardScaler()
+        scaler = MinMaxScaler()
         X_scaled = scaler.fit_transform(X)
         
         # Modelleri eğit
         lr_model = LinearRegression()
         rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
         
-        lr_model.fit(X_scaled, y)
-        rf_model.fit(X_scaled, y)
+        lr_model.fit(X_scaled[:-1], y[1:])
+        rf_model.fit(X_scaled[:-1], y[1:])
         
-        # Son veriyi kullanarak tahmin yap
+        # Tahminler
         last_data = X_scaled[-1].reshape(1, -1)
         lr_pred = lr_model.predict(last_data)[0]
         rf_pred = rf_model.predict(last_data)[0]
         
-        # Tahminleri birleştir
+        # Ortalama tahmin
         prediction = (lr_pred + rf_pred) / 2
         
-        # Günlük değişim oranını hesapla
-        daily_change = (prediction - prices[-1]) / prices[-1]
+        # Günlük değişim oranı
+        daily_change = (df['Close'].iloc[-1] - df['Close'].iloc[-2]) / df['Close'].iloc[-2]
         
-        # İstenen gün sayısına göre tahmini hesapla
-        final_prediction = prices[-1] * (1 + daily_change * days)
+        # Gelecek tahmin
+        future_prediction = prediction * (1 + daily_change) ** days
         
-        return round(final_prediction, 2)
+        return future_prediction
+        
     except Exception as e:
-        print(f"Tahmin hatası: {str(e)}")
-        return prices[-1]
+        print(f"Tahmin hesaplanırken hata oluştu: {str(e)}")
+        return 0
 
 def calculate_model_metrics(prices):
     """Model performans metriklerini hesaplar"""
     try:
         # Veriyi hazırla
-        df = pd.DataFrame({'Close': prices})
+        df = pd.DataFrame({'Close': prices.flatten()})
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         df['RSI'] = calculate_rsi(df['Close'])
@@ -642,36 +778,448 @@ def calculate_model_metrics(prices):
         # Özellikler ve hedef değişken
         features = ['Close', 'MA5', 'MA20', 'RSI', 'MACD', 'Signal']
         X = df[features].values
-        y = df['Close'].shift(-1).dropna().values
-        X = X[:-1]
+        y = df['Close'].values
         
         # Veriyi ölçeklendir
-        scaler = StandardScaler()
+        scaler = MinMaxScaler()
         X_scaled = scaler.fit_transform(X)
         
         # Modelleri eğit
         lr_model = LinearRegression()
         rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
         
-        lr_model.fit(X_scaled, y)
-        rf_model.fit(X_scaled, y)
+        lr_model.fit(X_scaled[:-1], y[1:])
+        rf_model.fit(X_scaled[:-1], y[1:])
         
-        # Model performans metriklerini hesapla
-        lr_score = lr_model.score(X_scaled, y)
-        rf_score = rf_model.score(X_scaled, y)
+        # Model performansı
+        lr_score = lr_model.score(X_scaled[:-1], y[1:])
+        rf_score = rf_model.score(X_scaled[:-1], y[1:])
         
-        # Ortalama doğruluk
-        accuracy = round((lr_score + rf_score) / 2 * 100, 2)
+        # Metrikleri hesapla
+        accuracy = (lr_score + rf_score) / 2 * 100
+        mae = np.mean(np.abs(y[1:] - lr_model.predict(X_scaled[:-1])))
+        r2 = (lr_score + rf_score) / 2
         
-        # R² skoru
-        r2 = round((lr_score + rf_score) / 2, 2)
+        return accuracy, mae, r2
         
-        # Ortalama mutlak hata
-        lr_pred = lr_model.predict(X_scaled)
-        rf_pred = rf_model.predict(X_scaled)
-        mae = round(np.mean(np.abs(y - (lr_pred + rf_pred) / 2)), 2)
-        
-        return accuracy, r2, mae
     except Exception as e:
-        print(f"Metrik hesaplama hatası: {str(e)}")
+        print(f"Model metrikleri hesaplanırken hata oluştu: {str(e)}")
         return 0, 0, 0
+
+@login_required(login_url='login')
+def trading_chart(request):
+    symbol = request.GET.get('symbol', 'AAPL')  # Default to AAPL if no symbol provided
+    try:
+        # Hisse senedi bilgilerini al
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        
+        context = {
+            'symbol': symbol,
+            'company_name': info.get('longName', symbol),
+            'current_price': info.get('currentPrice', 0),
+            'change': info.get('regularMarketChangePercent', 0),
+            'volume': info.get('regularMarketVolume', 0),
+            'market_cap': info.get('marketCap', 0)
+        }
+        return render(request, 'finance/trading_chart.html', context)
+    except Exception as e:
+        messages.error(request, f"Hisse senedi verisi alınırken bir hata oluştu: {str(e)}")
+        return redirect('market')
+
+@login_required(login_url='login')
+@require_http_methods(["GET"])
+def get_stock_data(request):
+    try:
+        symbol = request.GET.get('symbol', 'AAPL')
+        print(f"Hisse senedi verisi alınıyor: {symbol}")
+
+        # yfinance ile veri çek
+        stock = yf.Ticker(symbol)
+        df = stock.history(period='1y', interval='1d')
+        
+        if df.empty:
+            print(f"Veri bulunamadı: {symbol}")
+            return JsonResponse({'error': 'Veri bulunamadı'}, status=404)
+
+        print(f"Ham veri satır sayısı: {len(df)}")
+
+        # Veriyi hazırla
+        candlestick_data = []
+        volume_data = []
+
+        for index, row in df.iterrows():
+            try:
+                timestamp = int(index.timestamp() * 1000)  # Unix timestamp (milisaniye)
+                
+                # Mum verisi
+                candlestick_data.append({
+                    'time': timestamp,
+                    'open': float(row['Open']),
+                    'high': float(row['High']),
+                    'low': float(row['Low']),
+                    'close': float(row['Close'])
+                })
+
+                # Hacim verisi
+                volume_data.append({
+                    'time': timestamp,
+                    'value': float(row['Volume']),
+                    'color': '#26a69a' if row['Close'] >= row['Open'] else '#ef5350'
+                })
+            except Exception as e:
+                print(f"Satır işleme hatası: {e}")
+                continue
+
+        if not candlestick_data or not volume_data:
+            print("Veri hazırlama hatası: Boş veri")
+            return JsonResponse({'error': 'Veri hazırlanamadı'}, status=500)
+
+        print(f"Hazırlanan mum verisi sayısı: {len(candlestick_data)}")
+        print(f"Hazırlanan hacim verisi sayısı: {len(volume_data)}")
+
+        response_data = {
+            'candlesticks': candlestick_data,
+            'volume': volume_data
+        }
+
+        return JsonResponse(response_data)
+
+    except Exception as e:
+        print(f"Genel hata: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required(login_url='login')
+@require_http_methods(["GET"])
+def get_technical_indicator(request):
+    symbol = request.GET.get('symbol', 'AAPL')
+    indicator = request.GET.get('indicator')
+    period = int(request.GET.get('period', 14))
+    
+    try:
+        stock = yf.Ticker(symbol)
+        df = stock.history(period='1mo')
+        
+        if indicator == 'sma':
+            sma = SMAIndicator(close=df['Close'], window=period)
+            values = sma.sma_indicator()
+        elif indicator == 'ema':
+            ema = EMAIndicator(close=df['Close'], window=period)
+            values = ema.ema_indicator()
+        elif indicator == 'macd':
+            macd = MACD(close=df['Close'])
+            values = macd.macd()
+        elif indicator == 'rsi':
+            rsi = RSIIndicator(close=df['Close'], window=period)
+            values = rsi.rsi()
+        elif indicator == 'stochastic':
+            high_14 = df['High'].rolling(window=period).max()
+            low_14 = df['Low'].rolling(window=period).min()
+            k = 100 * ((df['Close'] - low_14) / (high_14 - low_14))
+            values = k
+        elif indicator == 'cci':
+            tp = (df['High'] + df['Low'] + df['Close']) / 3
+            tp_ma = tp.rolling(window=period).mean()
+            tp_md = tp.rolling(window=period).apply(lambda x: pd.Series(x).mad())
+            values = (tp - tp_ma) / (0.015 * tp_md)
+        elif indicator == 'mfi':
+            typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+            money_flow = typical_price * df['Volume']
+            positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0)
+            negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0)
+            positive_mf = positive_flow.rolling(window=period).sum()
+            negative_mf = negative_flow.rolling(window=period).sum()
+            values = 100 - (100 / (1 + positive_mf / negative_mf))
+        elif indicator == 'williams_r':
+            highest_high = df['High'].rolling(window=period).max()
+            lowest_low = df['Low'].rolling(window=period).min()
+            values = -100 * (highest_high - df['Close']) / (highest_high - lowest_low)
+        elif indicator == 'roc':
+            values = ((df['Close'] - df['Close'].shift(period)) / df['Close'].shift(period)) * 100
+        elif indicator == 'obv':
+            values = (np.sign(df['Close'].diff()) * df['Volume']).fillna(0).cumsum()
+        elif indicator == 'ad':
+            clv = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
+            clv = clv.fillna(0)
+            values = (clv * df['Volume']).cumsum()
+        elif indicator == 'cmf':
+            mfv = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
+            mfv = mfv.fillna(0)
+            mfv *= df['Volume']
+            values = mfv.rolling(window=period).sum() / df['Volume'].rolling(window=period).sum()
+        elif indicator == 'atr':
+            high_low = df['High'] - df['Low']
+            high_close = np.abs(df['High'] - df['Close'].shift())
+            low_close = np.abs(df['Low'] - df['Close'].shift())
+            ranges = pd.concat([high_low, high_close, low_close], axis=1)
+            true_range = np.max(ranges, axis=1)
+            values = true_range.rolling(window=period).mean()
+        elif indicator == 'bollinger_bands':
+            sma = df['Close'].rolling(window=period).mean()
+            std = df['Close'].rolling(window=period).std()
+            upper_band = sma + (std * 2)
+            lower_band = sma - (std * 2)
+            values = pd.DataFrame({
+                'upper': upper_band,
+                'middle': sma,
+                'lower': lower_band
+            })
+        elif indicator == 'keltner_channels':
+            ema = df['Close'].ewm(span=period).mean()
+            atr = calculate_atr(df, period)
+            upper_band = ema + (atr * 2)
+            lower_band = ema - (atr * 2)
+            values = pd.DataFrame({
+                'upper': upper_band,
+                'middle': ema,
+                'lower': lower_band
+            })
+        elif indicator == 'donchian_channels':
+            upper_band = df['High'].rolling(window=period).max()
+            lower_band = df['Low'].rolling(window=period).min()
+            middle_band = (upper_band + lower_band) / 2
+            values = pd.DataFrame({
+                'upper': upper_band,
+                'middle': middle_band,
+                'lower': lower_band
+            })
+        else:
+            return JsonResponse({'error': 'Geçersiz gösterge'}, status=400)
+        
+        # Grafik formatına dönüştür
+        if isinstance(values, pd.DataFrame):
+            indicator_data = []
+            for col in values.columns:
+                series_data = []
+                for index, value in values[col].items():
+                    if pd.notna(value):
+                        series_data.append({
+                            'time': int(index.timestamp()),
+                            'value': float(value)
+                        })
+                indicator_data.append({
+                    'name': col,
+                    'data': series_data
+                })
+        else:
+            indicator_data = []
+            for index, value in values.items():
+                if pd.notna(value):
+                    indicator_data.append({
+                        'time': int(index.timestamp()),
+                        'value': float(value)
+                    })
+        
+        return JsonResponse({'data': indicator_data})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required(login_url='login')
+@require_http_methods(["GET"])
+def apply_strategy(request):
+    symbol = request.GET.get('symbol', 'AAPL')
+    strategy = request.GET.get('strategy')
+    
+    try:
+        stock = yf.Ticker(symbol)
+        df = stock.history(period='1mo')
+        
+        signals = []
+        
+        if strategy == 'moving_average_crossover':
+            # SMA 20 ve 50 kesişimi
+            sma20 = df['Close'].rolling(window=20).mean()
+            sma50 = df['Close'].rolling(window=50).mean()
+            
+            for i in range(1, len(df)):
+                if sma20[i] > sma50[i] and sma20[i-1] <= sma50[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'aboveBar',
+                        'color': '#26a69a',
+                        'shape': 'arrowUp',
+                        'text': 'Al'
+                    })
+                elif sma20[i] < sma50[i] and sma20[i-1] >= sma50[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'belowBar',
+                        'color': '#ef5350',
+                        'shape': 'arrowDown',
+                        'text': 'Sat'
+                    })
+        
+        elif strategy == 'macd_crossover':
+            # MACD kesişimi
+            macd = MACD(close=df['Close'])
+            macd_line = macd.macd()
+            signal_line = macd.macd_signal()
+            
+            for i in range(1, len(df)):
+                if macd_line[i] > signal_line[i] and macd_line[i-1] <= signal_line[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'aboveBar',
+                        'color': '#26a69a',
+                        'shape': 'arrowUp',
+                        'text': 'Al'
+                    })
+                elif macd_line[i] < signal_line[i] and macd_line[i-1] >= signal_line[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'belowBar',
+                        'color': '#ef5350',
+                        'shape': 'arrowDown',
+                        'text': 'Sat'
+                    })
+        
+        elif strategy == 'bollinger_breakout':
+            # Bollinger Bantları kırılması
+            sma = df['Close'].rolling(window=20).mean()
+            std = df['Close'].rolling(window=20).std()
+            upper_band = sma + (std * 2)
+            lower_band = sma - (std * 2)
+            
+            for i in range(1, len(df)):
+                if df['Close'][i] > upper_band[i] and df['Close'][i-1] <= upper_band[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'aboveBar',
+                        'color': '#26a69a',
+                        'shape': 'arrowUp',
+                        'text': 'Al'
+                    })
+                elif df['Close'][i] < lower_band[i] and df['Close'][i-1] >= lower_band[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'belowBar',
+                        'color': '#ef5350',
+                        'shape': 'arrowDown',
+                        'text': 'Sat'
+                    })
+        
+        elif strategy == 'rsi_overbought_oversold':
+            # RSI aşırı alım/satım
+            rsi = RSIIndicator(close=df['Close']).rsi()
+            
+            for i in range(1, len(df)):
+                if rsi[i] < 30 and rsi[i-1] >= 30:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'aboveBar',
+                        'color': '#26a69a',
+                        'shape': 'arrowUp',
+                        'text': 'Al'
+                    })
+                elif rsi[i] > 70 and rsi[i-1] <= 70:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'belowBar',
+                        'color': '#ef5350',
+                        'shape': 'arrowDown',
+                        'text': 'Sat'
+                    })
+        
+        elif strategy == 'stochastic_crossover':
+            # Stokastik kesişimi
+            high_14 = df['High'].rolling(window=14).max()
+            low_14 = df['Low'].rolling(window=14).min()
+            k = 100 * ((df['Close'] - low_14) / (high_14 - low_14))
+            d = k.rolling(window=3).mean()
+            
+            for i in range(1, len(df)):
+                if k[i] > d[i] and k[i-1] <= d[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'aboveBar',
+                        'color': '#26a69a',
+                        'shape': 'arrowUp',
+                        'text': 'Al'
+                    })
+                elif k[i] < d[i] and k[i-1] >= d[i-1]:
+                    signals.append({
+                        'time': int(df.index[i].timestamp()),
+                        'position': 'belowBar',
+                        'color': '#ef5350',
+                        'shape': 'arrowDown',
+                        'text': 'Sat'
+                    })
+        
+        return JsonResponse({'signals': signals})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+def calculate_atr(df, period):
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = np.max(ranges, axis=1)
+    return true_range.rolling(window=period).mean()
+
+@login_required(login_url='login')
+@require_http_methods(["POST"])
+def add_price_alert(request):
+    try:
+        data = json.loads(request.body)
+        symbol = data.get('symbol')
+        price = float(data.get('price'))
+        condition = data.get('condition')
+        
+        # Burada alarmı veritabanına kaydedebilirsiniz
+        # Şimdilik sadece başarılı yanıt dönüyoruz
+        return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_POST
+def add_holding(request):
+    try:
+        data = json.loads(request.body)
+        symbol = data.get('symbol')
+        shares = data.get('shares')
+        average_cost = data.get('average_cost')
+        purchase_date = data.get('purchase_date')
+        
+        if not all([symbol, shares, average_cost, purchase_date]):
+            return JsonResponse({'success': False, 'error': 'Tüm alanlar gereklidir.'})
+        
+        # Hisse senedinin geçerli olup olmadığını kontrol et
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        if not info:
+            return JsonResponse({'success': False, 'error': 'Geçersiz hisse senedi sembolü.'})
+        
+        # Portföye ekle
+        holding = StockHolding.objects.create(
+            portfolio=request.user.portfolio,
+            symbol=symbol,
+            shares=shares,
+            average_cost=average_cost,
+            purchase_date=purchase_date
+        )
+        
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_http_methods(["GET"])
+def get_market_news(request):
+    try:
+        print("Piyasa haberleri isteği alındı")
+        # Yahoo Finance haberlerini al
+        market_news = get_yahoo_news()
+        print(f"Toplam haber sayısı: {len(market_news)}")
+        
+        return JsonResponse({
+            'success': True,
+            'news': market_news
+        })
+    except Exception as e:
+        print(f"Piyasa haberleri alınırken hata: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

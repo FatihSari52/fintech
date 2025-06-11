@@ -55,7 +55,7 @@
                             <th>Değişim</th>
                             <th>Hacim</th>
                             <th>Piyasa Değeri</th>
-                            <th>İşlem</th>
+                            <th>İşlemler</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -70,9 +70,14 @@
                             <td>{{ stock.volume }}</td>
                             <td>{{ stock.market_cap }}</td>
                             <td>
-                                <a href="{% url 'analysis' %}?symbol={{ stock.symbol }}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-chart-line"></i> Analiz
-                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'stock_predictor' %}?symbol={{ stock.symbol }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-chart-line"></i> Analiz
+                                    </a>
+                                    <a href="{% url 'trading_chart' %}?symbol={{ stock.symbol }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-chart-bar"></i> Grafik
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -83,33 +88,71 @@
     </div>
 
     <!-- Piyasa Haberleri -->
-    <div class="card">
-        <div class="card-header">
-            <h4 class="card-title mb-0">Piyasa Haberleri</h4>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                {% for news in market_news %}
-                <div class="col-md-4 mb-4">
-                    <div class="card h-100">
-                        {% if news.image %}
-                        <img src="{{ news.image }}" class="card-img-top" alt="{{ news.title }}">
-                        {% endif %}
-                        <div class="card-body">
-                            <h5 class="card-title">{{ news.title }}</h5>
-                            <p class="card-text">{{ news.description }}</p>
-                            <p class="text-muted">
-                                <small>{{ news.source }} - {{ news.published_at }}</small>
-                            </p>
-                            <a href="{{ news.url }}" class="btn btn-outline-primary btn-sm" target="_blank">
-                                Devamını Oku
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Piyasa Haberleri</h5>
+                </div>
+                <div class="card-body" id="market-news">
+                    {% for news in market_news %}
+                    <div class="mb-3">
+                        <h6 class="mb-1">
+                            <a href="{{ news.url }}" target="_blank" class="text-decoration-none">{{ news.title }}</a>
+                        </h6>
+                        <p class="text-muted small mb-0">
+                            {{ news.description }} | {{ news.published_at }}
+                        </p>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="card-footer">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="https://www.bloomberg.com/markets" target="_blank" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-external-link-alt"></i> Bloomberg Markets
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="https://www.cnbc.com/markets/" target="_blank" class="btn btn-outline-danger w-100">
+                                <i class="fas fa-external-link-alt"></i> CNBC Markets
                             </a>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
             </div>
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+function updateNews() {
+    fetch('/get-market-news/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const newsContainer = document.getElementById('market-news');
+                newsContainer.innerHTML = data.news.map(news => `
+                    <div class="mb-3">
+                        <h6 class="mb-1">
+                            <a href="${news.url}" target="_blank" class="text-decoration-none">${news.title}</a>
+                        </h6>
+                        <p class="text-muted small mb-0">
+                            ${news.description} | ${news.published_at}
+                        </p>
+                    </div>
+                `).join('');
+            }
+        })
+        .catch(error => console.error('Haberler güncellenirken hata oluştu:', error));
+}
+
+// Sayfa yüklendiğinde ve her 5 dakikada bir haberleri güncelle
+document.addEventListener('DOMContentLoaded', () => {
+    updateNews();
+    setInterval(updateNews, 300000); // 5 dakika = 300000 ms
+});
+</script>
+{% endblock %}
 {% endblock %} 

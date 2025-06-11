@@ -1,63 +1,53 @@
 {% extends 'finance/base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="container py-5">
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h2>Hisse Senedi Tahmin ve Analiz</h2>
-            <p class="text-muted">Hisse senedi sembolünü girerek detaylı analiz ve tahminleri görüntüleyin.</p>
-        </div>
-    </div>
-
-    <!-- Arama Formu -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="symbol" class="form-label">Hisse Senedi Sembolü</label>
-                    <input type="text" class="form-control" id="symbol" name="symbol" 
-                           placeholder="Örn: AAPL, MSFT, GOOGL" value="{{ symbol|default:'' }}" required>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Analiz Et</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    {% if searched %}
-    <!-- Sonuçlar -->
     <div class="row">
-        <!-- Sol Kolon: Temel Bilgiler ve Göstergeler -->
-        <div class="col-md-4">
+        <div class="col-md-8">
+            <!-- Hisse Senedi Bilgileri ve Tahminler -->
             <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">{{ symbol }} Temel Bilgiler</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="card-title mb-0">{{ symbol }} Analizi</h4>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="addToWatchlist()">
+                            <i class="fas fa-star"></i> İzleme Listesine Ekle
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <h3 class="mb-0">${{ current_price }}</h3>
-                        <p class="text-muted mb-0">Güncel Fiyat</p>
-                    </div>
-                    <hr>
                     <div class="row">
-                        <div class="col-6">
-                            <p class="mb-1">RSI</p>
-                            <h5>{{ rsi }}</h5>
+                        <div class="col-md-6">
+                            <h5>Fiyat Bilgileri</h5>
+                            <table class="table">
+                                <tr>
+                                    <td>Güncel Fiyat</td>
+                                    <td>${{ current_price|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Günlük Değişim</td>
+                                    <td class="{% if change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ change|floatformat:2 }}%
+                                    </td>
+                                </tr>
+                            </table>
                         </div>
-                        <div class="col-6">
-                            <p class="mb-1">MACD</p>
-                            <h5>{{ macd }}</h5>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-6">
-                            <p class="mb-1">Bollinger Üst</p>
-                            <h5>{{ upper_band }}</h5>
-                        </div>
-                        <div class="col-6">
-                            <p class="mb-1">Bollinger Alt</p>
-                            <h5>{{ lower_band }}</h5>
+                        <div class="col-md-6">
+                            <h5>Model Performansı</h5>
+                            <table class="table">
+                                <tr>
+                                    <td>Doğruluk</td>
+                                    <td>{{ accuracy|floatformat:2 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>R² Skoru</td>
+                                    <td>{{ r2|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>MSE</td>
+                                    <td>{{ mae|floatformat:2 }}</td>
+                                </tr>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -66,133 +56,92 @@
             <!-- Tahminler -->
             <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Tahminler</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <p class="mb-1">1 Günlük Tahmin</p>
-                        <h4>${{ prediction_1d }}</h4>
-                        <small class="text-muted">
-                            {% if prediction_1d > current_price %}
-                            <span class="text-success">↑ {{ prediction_1d|floatformat:2 }} ({{ prediction_1d|floatformat:2 }}%)</span>
-                            {% else %}
-                            <span class="text-danger">↓ {{ prediction_1d|floatformat:2 }} ({{ prediction_1d|floatformat:2 }}%)</span>
-                            {% endif %}
-                        </small>
-                    </div>
-                    <div class="mb-3">
-                        <p class="mb-1">7 Günlük Tahmin</p>
-                        <h4>${{ prediction_7d }}</h4>
-                    </div>
-                    <div>
-                        <p class="mb-1">30 Günlük Tahmin</p>
-                        <h4>${{ prediction_30d }}</h4>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Model Performansı -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Model Performansı</h5>
+                    <h5 class="card-title mb-0">Fiyat Tahminleri</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-6">
-                            <p class="mb-1">Doğruluk</p>
-                            <h5>{{ accuracy }}%</h5>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <p class="mb-1">Gün Sonu Tahmin</p>
+                                <h4>${{ prediction_1d|floatformat:2 }}</h4>
+                                <small class="text-muted">
+                                    {% if prediction_1d > current_price %}
+                                    <span class="text-success">↑ {{ prediction_1d|floatformat:2 }} ({{ prediction_1d|floatformat:2 }}%)</span>
+                                    {% else %}
+                                    <span class="text-danger">↓ {{ prediction_1d|floatformat:2 }} ({{ prediction_1d|floatformat:2 }}%)</span>
+                                    {% endif %}
+                                </small>
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <p class="mb-1">R² Skoru</p>
-                            <h5>{{ r2 }}</h5>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-12">
-                            <p class="mb-1">Ortalama Mutlak Hata</p>
-                            <h5>{{ mae }}</h5>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <p class="mb-1">1 Haftalık Tahmin</p>
+                                <h4>${{ prediction_7d|floatformat:2 }}</h4>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Sağ Kolon: Grafikler -->
-        <div class="col-md-8">
-            <div class="card">
+            <!-- Fiyat Grafiği -->
+            <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Fiyat Grafiği ve Tahminler</h5>
+                    <h5 class="card-title mb-0">Fiyat Grafiği</h5>
                 </div>
                 <div class="card-body">
                     <div id="priceChart" style="height: 400px;"></div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Alım/Satım Sinyalleri -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5 class="card-title mb-0">Teknik Analiz Sinyalleri</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                {% for signal in signals %}
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h6 class="card-title">{{ signal.name }}</h6>
-                            <p class="card-text">{{ signal.description }}</p>
-                            <div class="d-flex align-items-center">
-                                <span class="badge {% if signal.signal == 'BUY' %}bg-success{% elif signal.signal == 'SELL' %}bg-danger{% else %}bg-warning{% endif %} me-2">
-                                    {{ signal.signal }}
-                                </span>
-                            </div>
+            <!-- Teknik Göstergeler -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Teknik Göstergeler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table">
+                                <tr>
+                                    <td>RSI</td>
+                                    <td>{{ rsi }}</td>
+                                </tr>
+                                <tr>
+                                    <td>MACD</td>
+                                    <td>{{ macd }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table">
+                                <tr>
+                                    <td>Bollinger Üst</td>
+                                    <td>{{ upper_band }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Bollinger Alt</td>
+                                    <td>{{ lower_band }}</td>
+                                </tr>
+                            </table>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
             </div>
         </div>
     </div>
-    {% endif %}
 </div>
-{% endblock %}
 
 {% block extra_js %}
-{% if searched %}
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script>
+    // Fiyat grafiği
     var priceData = {{ price_data|safe }};
-    
-    // Tahmin verilerini ekle
-    var predictionData = {
-        x: [priceData.x[priceData.x.length - 1], '{{ prediction_date }}'],
-        y: [priceData.y[priceData.y.length - 1], {{ prediction_1d }}],
-        type: 'scatter',
-        mode: 'lines+markers',
-        name: 'Tahmin',
-        line: {
-            dash: 'dot',
-            color: 'red'
-        }
-    };
-
     var layout = {
-        title: '{{ symbol }} Fiyat Grafiği ve Tahmin',
-        xaxis: { 
-            title: 'Tarih',
-            rangeslider: { visible: true }
-        },
-        yaxis: { title: 'Fiyat' },
-        showlegend: true,
-        legend: {
-            x: 0,
-            y: 1
-        }
+        title: '{{ symbol }} Fiyat Grafiği',
+        xaxis: { title: 'Tarih' },
+        yaxis: { title: 'Fiyat' }
     };
-
-    Plotly.newPlot('priceChart', [priceData, predictionData], layout);
+    Plotly.newPlot('priceChart', [priceData], layout);
 </script>
-{% endif %}
+{% endblock %}
 {% endblock %} 

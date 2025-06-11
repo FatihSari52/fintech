@@ -1,0 +1,982 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block content %}
+<style>
+    /* TradingView logo ve köprüsünü gizle */
+    .tv-lightweight-charts {
+        position: relative;
+    }
+    .tv-lightweight-charts > div:last-child {
+        display: none !important;
+    }
+    .tv-lightweight-charts > div:last-child svg {
+        display: none !important;
+    }
+    /* SVG path'i gizle */
+    path[fill="var(--fill)"] {
+        display: none !important;
+    }
+    /* Tüm SVG elementlerini kontrol et */
+    svg {
+        display: none !important;
+    }
+    /* Grafik container stilini güncelle */
+    #trading-chart {
+        position: relative;
+        width: 100%;
+        height: 600px;
+        background: #ffffff;
+    }
+    /* TradingView attribution'ı gizle */
+    .tv-lightweight-charts > div:last-child,
+    .tv-lightweight-charts > div:last-child > div,
+    .tv-lightweight-charts > div:last-child > div > div {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    /* Aktif buton stili */
+    .btn-group .btn.active {
+        background-color: #007bff;
+        color: white;
+    }
+    /* Çizim araçları butonları */
+    .drawing-tools .btn {
+        margin: 2px;
+    }
+    .drawing-tools .btn.active {
+        background-color: #28a745;
+        color: white;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Üst Bilgi Kartı -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-0">{{ symbol }} - {{ company_name }}</h4>
+                            <p class="text-muted mb-0">
+                                Fiyat: ${{ current_price|floatformat:2 }} 
+                                ({{ change|floatformat:2 }}%)
+                            </p>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-outline-primary active" id="candlestick">Mum</button>
+                            <button class="btn btn-outline-primary" id="line">Çizgi</button>
+                            <button class="btn btn-outline-primary" id="bar">Bar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ana Grafik -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div id="trading-chart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teknik Göstergeler -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Teknik Göstergeler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Trend Göstergeleri</label>
+                                <select class="form-control" id="trend-indicators">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="sma">Basit Hareketli Ortalama (SMA)</option>
+                                    <option value="ema">Üstel Hareketli Ortalama (EMA)</option>
+                                    <option value="macd">MACD</option>
+                                    <option value="adx">ADX</option>
+                                    <option value="ichimoku">Ichimoku Cloud</option>
+                                    <option value="parabolic_sar">Parabolic SAR</option>
+                                    <option value="supertrend">SuperTrend</option>
+                                    <option value="bollinger_bands">Bollinger Bantları</option>
+                                    <option value="keltner_channels">Keltner Kanalları</option>
+                                    <option value="donchian_channels">Donchian Kanalları</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Momentum Göstergeleri</label>
+                                <select class="form-control" id="momentum-indicators">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="rsi">RSI</option>
+                                    <option value="stochastic">Stokastik</option>
+                                    <option value="cci">CCI</option>
+                                    <option value="mfi">MFI</option>
+                                    <option value="williams_r">Williams %R</option>
+                                    <option value="roc">Rate of Change</option>
+                                    <option value="mfi">Money Flow Index</option>
+                                    <option value="obv">OBV</option>
+                                    <option value="ad">Accumulation/Distribution</option>
+                                    <option value="cmf">Chaikin Money Flow</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Volatilite Göstergeleri</label>
+                                <select class="form-control" id="volatility-indicators">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="atr">ATR</option>
+                                    <option value="bollinger_bands">Bollinger Bantları</option>
+                                    <option value="keltner_channels">Keltner Kanalları</option>
+                                    <option value="donchian_channels">Donchian Kanalları</option>
+                                    <option value="standard_deviation">Standart Sapma</option>
+                                    <option value="average_true_range">Ortalama Gerçek Aralık</option>
+                                    <option value="chaikin_volatility">Chaikin Volatilite</option>
+                                    <option value="mass_index">Mass Index</option>
+                                    <option value="true_range">Gerçek Aralık</option>
+                                    <option value="volatility_ratio">Volatilite Oranı</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Hacim Göstergeleri</label>
+                                <select class="form-control" id="volume-indicators">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="obv">OBV</option>
+                                    <option value="vpt">Volume Price Trend</option>
+                                    <option value="cmf">Chaikin Money Flow</option>
+                                    <option value="mfi">Money Flow Index</option>
+                                    <option value="ad">Accumulation/Distribution</option>
+                                    <option value="eom">Ease of Movement</option>
+                                    <option value="vpt">Volume Price Trend</option>
+                                    <option value="nvi">Negative Volume Index</option>
+                                    <option value="pvi">Positive Volume Index</option>
+                                    <option value="volume_ma">Hacim Hareketli Ortalama</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>Periyot</label>
+                                <input type="number" class="form-control" id="indicator-period" value="14" min="1" max="200">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label>&nbsp;</label>
+                                <button class="btn btn-primary w-100" id="add-indicator">Gösterge Ekle</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Çizim Araçları -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Çizim Araçları</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group drawing-tools">
+                        <button class="btn btn-outline-primary" id="draw-line">Çizgi</button>
+                        <button class="btn btn-outline-primary" id="draw-horizontal">Yatay Çizgi</button>
+                        <button class="btn btn-outline-primary" id="draw-vertical">Dikey Çizgi</button>
+                        <button class="btn btn-outline-primary" id="draw-rectangle">Dikdörtgen</button>
+                        <button class="btn btn-outline-primary" id="draw-fibonacci">Fibonacci</button>
+                        <button class="btn btn-outline-primary" id="draw-trendline">Trend Çizgisi</button>
+                        <button class="btn btn-outline-primary" id="draw-pitchfork">Andrews Pitchfork</button>
+                        <button class="btn btn-outline-primary" id="draw-gann">Gann Fan</button>
+                        <button class="btn btn-outline-primary" id="draw-elliott">Elliott Wave</button>
+                        <button class="btn btn-outline-primary" id="draw-text">Metin</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stratejiler -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Stratejiler</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Trend Stratejileri</label>
+                                <select class="form-control" id="trend-strategies">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="moving_average_crossover">Hareketli Ortalama Kesişimi</option>
+                                    <option value="macd_crossover">MACD Kesişimi</option>
+                                    <option value="bollinger_breakout">Bollinger Kırılması</option>
+                                    <option value="ichimoku_crossover">Ichimoku Kesişimi</option>
+                                    <option value="supertrend">SuperTrend</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Momentum Stratejileri</label>
+                                <select class="form-control" id="momentum-strategies">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="rsi_overbought_oversold">RSI Aşırı Alım/Satım</option>
+                                    <option value="stochastic_crossover">Stokastik Kesişimi</option>
+                                    <option value="cci_signal">CCI Sinyali</option>
+                                    <option value="mfi_divergence">MFI Uyumsuzluğu</option>
+                                    <option value="williams_r_reversal">Williams %R Dönüşü</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Volatilite Stratejileri</label>
+                                <select class="form-control" id="volatility-strategies">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="bollinger_squeeze">Bollinger Sıkışması</option>
+                                    <option value="keltner_breakout">Keltner Kırılması</option>
+                                    <option value="atr_breakout">ATR Kırılması</option>
+                                    <option value="volatility_expansion">Volatilite Genişlemesi</option>
+                                    <option value="volatility_contraction">Volatilite Daralması</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button class="btn btn-primary" id="apply-strategy">Strateji Uygula</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fiyat Alarmları -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Fiyat Alarmları</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <input type="number" class="form-control" id="alert-price" placeholder="Fiyat">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <select class="form-control" id="alert-condition">
+                                    <option value="above">Üzerinde</option>
+                                    <option value="below">Altında</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-primary w-100" id="add-alert">Alarm Ekle</button>
+                        </div>
+                    </div>
+                    <div id="alerts-list" class="mt-3">
+                        <!-- Alarmlar burada listelenecek -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Grafik değişkenleri
+    const chartContainer = document.getElementById('trading-chart');
+    let chart = null;
+    let candlestickSeries = null;
+    let lineSeries = null;
+    let barSeries = null;
+    let volumeSeries = null;
+    let currentChartType = 'candlestick';
+    let indicators = [];
+    let drawingTool = null;
+    let isDrawing = false;
+    let startPoint = null;
+
+    // Grafik oluşturma fonksiyonu
+    function createChart() {
+        if (chart) {
+            chart.remove();
+        }
+
+        chart = LightweightCharts.createChart(chartContainer, {
+            width: chartContainer.clientWidth,
+            height: 600,
+            layout: {
+                backgroundColor: '#ffffff',
+                textColor: '#333',
+            },
+            grid: {
+                vertLines: { color: '#f0f0f0' },
+                horzLines: { color: '#f0f0f0' },
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal,
+            },
+            rightPriceScale: {
+                borderColor: '#f0f0f0',
+                scaleMargins: {
+                    top: 0.1,
+                    bottom: 0.1,
+                },
+            },
+            timeScale: {
+                borderColor: '#f0f0f0',
+                timeVisible: true,
+                secondsVisible: false,
+                fixLeftEdge: true,
+                fixRightEdge: true,
+            },
+        });
+
+        // Hacim serisi
+        volumeSeries = chart.addHistogramSeries({
+            color: '#26a69a',
+            priceFormat: {
+                type: 'volume',
+            },
+            priceScaleId: '',
+            scaleMargins: {
+                top: 0.8,
+                bottom: 0,
+            },
+        });
+
+        return chart;
+    }
+
+    // Veri yükleme fonksiyonu
+    async function loadChartData() {
+        try {
+            console.log('Veri yükleniyor...');
+            const response = await fetch(`/api/stock-data/?symbol={{ symbol }}`);
+            console.log('API yanıtı:', response.status);
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('API Hatası:', errorData);
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Gelen veri:', data);
+
+            if (!data.candlesticks || !data.volume) {
+                console.error('Veri formatı hatalı:', data);
+                throw new Error('Veri formatı hatalı');
+            }
+
+            if (data.candlesticks.length === 0 || data.volume.length === 0) {
+                console.error('Boş veri:', data);
+                throw new Error('Veri bulunamadı');
+            }
+
+            // Mum verilerini hazırla
+            const candlestickData = data.candlesticks.map(d => ({
+                time: d.time,
+                open: parseFloat(d.open),
+                high: parseFloat(d.high),
+                low: parseFloat(d.low),
+                close: parseFloat(d.close)
+            }));
+
+            // Hacim verilerini hazırla
+            const volumeData = data.volume.map(d => ({
+                time: d.time,
+                value: parseFloat(d.value),
+                color: d.color
+            }));
+
+            console.log('İşlenmiş mum verileri:', candlestickData);
+            console.log('İşlenmiş hacim verileri:', volumeData);
+
+            // Grafik tipine göre veriyi ayarla
+            if (currentChartType === 'candlestick') {
+                if (!candlestickSeries) {
+                    console.log('Mum grafiği oluşturuluyor...');
+                    candlestickSeries = chart.addCandlestickSeries({
+                        upColor: '#26a69a',
+                        downColor: '#ef5350',
+                        borderVisible: false,
+                        wickUpColor: '#26a69a',
+                        wickDownColor: '#ef5350'
+                    });
+                }
+                console.log('Mum verileri ayarlanıyor...');
+                candlestickSeries.setData(candlestickData);
+            } else if (currentChartType === 'line') {
+                if (!lineSeries) {
+                    console.log('Çizgi grafiği oluşturuluyor...');
+                    lineSeries = chart.addLineSeries({
+                        color: '#2962FF',
+                        lineWidth: 2,
+                    });
+                }
+                const lineData = candlestickData.map(d => ({
+                    time: d.time,
+                    value: d.close
+                }));
+                console.log('Çizgi verileri ayarlanıyor...');
+                lineSeries.setData(lineData);
+            } else if (currentChartType === 'bar') {
+                if (!barSeries) {
+                    console.log('Bar grafiği oluşturuluyor...');
+                    barSeries = chart.addBarSeries({
+                        upColor: '#26a69a',
+                        downColor: '#ef5350',
+                    });
+                }
+                console.log('Bar verileri ayarlanıyor...');
+                barSeries.setData(candlestickData);
+            }
+
+            // Hacim verilerini ayarla
+            console.log('Hacim verileri ayarlanıyor...');
+            volumeSeries.setData(volumeData);
+
+            // Grafiği son veriye odakla
+            console.log('Grafik odaklanıyor...');
+            chart.timeScale().fitContent();
+
+            console.log('Grafik başarıyla yüklendi!');
+
+        } catch (error) {
+            console.error('Veri yükleme hatası:', error);
+            alert('Veri yüklenirken bir hata oluştu: ' + error.message);
+        }
+    }
+
+    // Grafik tipi değiştirme fonksiyonu
+    function changeChartType(type) {
+        currentChartType = type;
+        createChart();
+        loadChartData();
+        // Göstergeleri yeniden ekle
+        indicators.forEach(indicator => {
+            addIndicator(indicator.name, indicator.period);
+        });
+    }
+
+    // Gösterge ekleme fonksiyonu
+    async function addIndicator(indicator, period) {
+        try {
+            console.log('Gösterge yükleniyor:', indicator, period);
+            const response = await fetch(`/get-technical-indicator/?symbol={{ symbol }}&indicator=${indicator}&period=${period}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log('Gösterge verisi:', data);
+            
+            if (!chart) {
+                throw new Error('Grafik henüz oluşturulmadı');
+            }
+
+            if (data.data) {
+                if (Array.isArray(data.data)) {
+                    // Tek seri
+                    const indicatorSeries = chart.addLineSeries({
+                        color: '#2962FF',
+                        lineWidth: 2,
+                        priceScaleId: 'right',
+                    });
+                    const formattedData = data.data.map(item => ({
+                        time: item.time,
+                        value: parseFloat(item.value)
+                    }));
+                    indicatorSeries.setData(formattedData);
+                } else {
+                    // Çoklu seri (örn. Bollinger Bantları)
+                    Object.entries(data.data).forEach(([name, seriesData]) => {
+                        const indicatorSeries = chart.addLineSeries({
+                            color: name === 'upper' ? '#26a69a' : name === 'lower' ? '#ef5350' : '#2962FF',
+                            lineWidth: 2,
+                            priceScaleId: 'right',
+                        });
+                        const formattedData = seriesData.map(item => ({
+                            time: item.time,
+                            value: parseFloat(item.value)
+                        }));
+                        indicatorSeries.setData(formattedData);
+                    });
+                }
+                chart.timeScale().fitContent();
+            }
+        } catch (error) {
+            console.error('Gösterge yükleme hatası:', error);
+            alert('Gösterge yüklenirken bir hata oluştu: ' + error.message);
+        }
+    }
+
+    // Strateji uygulama fonksiyonu
+    async function applyStrategy(strategy) {
+        try {
+            const response = await fetch(`/apply-strategy/?symbol={{ symbol }}&strategy=${strategy}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            
+            if (data.signals) {
+                const markers = data.signals.map(signal => ({
+                    time: signal.time,
+                    position: signal.position,
+                    color: signal.color,
+                    shape: signal.shape,
+                    text: signal.text
+                }));
+                if (candlestickSeries) {
+                    candlestickSeries.setMarkers(markers);
+                }
+            }
+        } catch (error) {
+            console.error('Strateji uygulama hatası:', error);
+            alert('Strateji uygulanırken bir hata oluştu: ' + error.message);
+        }
+    }
+
+    // Çizim araçları fonksiyonları
+    function setActiveDrawingTool(tool, button) {
+        // Önceki aktif butonu temizle
+        document.querySelectorAll('.drawing-tools .btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Yeni butonu aktif yap
+        button.classList.add('active');
+        drawingTool = tool;
+        
+        // Çizim modunu güncelle
+        if (chart) {
+            chart.applyOptions({
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                }
+            });
+        }
+    }
+
+    // Çizim fonksiyonları
+    function drawLine(start, end) {
+        const lineSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+        });
+        lineSeries.setData([
+            { time: start.time, value: start.price },
+            { time: end.time, value: end.price }
+        ]);
+    }
+
+    function drawHorizontalLine(price) {
+        const lineSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+            lineStyle: 2,
+        });
+        const timeRange = chart.timeScale().getVisibleRange();
+        lineSeries.setData([
+            { time: timeRange.from, value: price },
+            { time: timeRange.to, value: price }
+        ]);
+    }
+
+    function drawVerticalLine(time) {
+        const lineSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+            lineStyle: 2,
+        });
+        const priceRange = chart.priceScale('right').getVisibleRange();
+        lineSeries.setData([
+            { time: time, value: priceRange.from },
+            { time: time, value: priceRange.to }
+        ]);
+    }
+
+    function drawRectangle(start, end) {
+        const rectangleSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+        });
+        rectangleSeries.setData([
+            { time: start.time, value: start.price },
+            { time: end.time, value: start.price },
+            { time: end.time, value: end.price },
+            { time: start.time, value: end.price },
+            { time: start.time, value: start.price }
+        ]);
+    }
+
+    function drawFibonacci(start, end) {
+        const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+        const priceDiff = end.price - start.price;
+        
+        levels.forEach(level => {
+            const price = start.price + (priceDiff * level);
+            const lineSeries = chart.addLineSeries({
+                color: '#2962FF',
+                lineWidth: 1,
+                lineStyle: 2,
+            });
+            lineSeries.setData([
+                { time: start.time, value: price },
+                { time: end.time, value: price }
+            ]);
+        });
+    }
+
+    function drawTrendLine(start, end) {
+        const lineSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+        });
+        lineSeries.setData([
+            { time: start.time, value: start.price },
+            { time: end.time, value: end.price }
+        ]);
+    }
+
+    function drawPitchfork(start, end) {
+        const midPoint = {
+            time: (start.time + end.time) / 2,
+            price: (start.price + end.price) / 2
+        };
+        
+        const lineSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+        });
+        lineSeries.setData([
+            { time: start.time, value: start.price },
+            { time: midPoint.time, value: midPoint.price },
+            { time: end.time, value: end.price }
+        ]);
+    }
+
+    function drawGannFan(start, end) {
+        const angles = [1, 2, 3, 4, 5, 6, 7, 8];
+        const timeDiff = end.time - start.time;
+        
+        angles.forEach(angle => {
+            const lineSeries = chart.addLineSeries({
+                color: '#2962FF',
+                lineWidth: 1,
+                lineStyle: 2,
+            });
+            lineSeries.setData([
+                { time: start.time, value: start.price },
+                { time: start.time + (timeDiff * angle), value: start.price + (end.price - start.price) * angle }
+            ]);
+        });
+    }
+
+    function drawElliottWave(start, end) {
+        const waves = 5;
+        const timeDiff = (end.time - start.time) / waves;
+        const priceDiff = (end.price - start.price) / waves;
+        
+        const lineSeries = chart.addLineSeries({
+            color: '#2962FF',
+            lineWidth: 2,
+        });
+        
+        const points = [];
+        for (let i = 0; i <= waves; i++) {
+            points.push({
+                time: start.time + (timeDiff * i),
+                value: start.price + (priceDiff * i)
+            });
+        }
+        
+        lineSeries.setData(points);
+    }
+
+    function drawText(point) {
+        const text = prompt('Metin girin:');
+        if (text) {
+            const marker = {
+                time: point.time,
+                position: 'aboveBar',
+                color: '#2962FF',
+                shape: 'text',
+                text: text
+            };
+            
+            if (candlestickSeries) {
+                candlestickSeries.setMarkers([marker]);
+            }
+        }
+    }
+
+    // Event listener'lar
+    document.getElementById('candlestick').addEventListener('click', () => {
+        document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('candlestick').classList.add('active');
+        changeChartType('candlestick');
+    });
+
+    document.getElementById('line').addEventListener('click', () => {
+        document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('line').classList.add('active');
+        changeChartType('line');
+    });
+
+    document.getElementById('bar').addEventListener('click', () => {
+        document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('bar').classList.add('active');
+        changeChartType('bar');
+    });
+
+    // Çizim araçları butonları
+    document.getElementById('draw-line').addEventListener('click', function() {
+        setActiveDrawingTool('line', this);
+    });
+
+    document.getElementById('draw-horizontal').addEventListener('click', function() {
+        setActiveDrawingTool('horizontal', this);
+    });
+
+    document.getElementById('draw-vertical').addEventListener('click', function() {
+        setActiveDrawingTool('vertical', this);
+    });
+
+    document.getElementById('draw-rectangle').addEventListener('click', function() {
+        setActiveDrawingTool('rectangle', this);
+    });
+
+    document.getElementById('draw-fibonacci').addEventListener('click', function() {
+        setActiveDrawingTool('fibonacci', this);
+    });
+
+    document.getElementById('draw-trendline').addEventListener('click', function() {
+        setActiveDrawingTool('trendline', this);
+    });
+
+    document.getElementById('draw-pitchfork').addEventListener('click', function() {
+        setActiveDrawingTool('pitchfork', this);
+    });
+
+    document.getElementById('draw-gann').addEventListener('click', function() {
+        setActiveDrawingTool('gann', this);
+    });
+
+    document.getElementById('draw-elliott').addEventListener('click', function() {
+        setActiveDrawingTool('elliott', this);
+    });
+
+    document.getElementById('draw-text').addEventListener('click', function() {
+        setActiveDrawingTool('text', this);
+    });
+
+    // Gösterge ekleme butonu
+    document.getElementById('add-indicator').addEventListener('click', () => {
+        const trendIndicator = document.getElementById('trend-indicators').value;
+        const momentumIndicator = document.getElementById('momentum-indicators').value;
+        const volatilityIndicator = document.getElementById('volatility-indicators').value;
+        const volumeIndicator = document.getElementById('volume-indicators').value;
+        const period = document.getElementById('indicator-period').value;
+
+        const indicator = trendIndicator || momentumIndicator || volatilityIndicator || volumeIndicator;
+        if (indicator) {
+            indicators.push({ name: indicator, period: period });
+            addIndicator(indicator, period);
+        }
+    });
+
+    // Strateji uygulama butonu
+    document.getElementById('apply-strategy').addEventListener('click', () => {
+        const trendStrategy = document.getElementById('trend-strategies').value;
+        const momentumStrategy = document.getElementById('momentum-strategies').value;
+        const volatilityStrategy = document.getElementById('volatility-strategies').value;
+
+        const strategy = trendStrategy || momentumStrategy || volatilityStrategy;
+        if (strategy) {
+            applyStrategy(strategy);
+        }
+    });
+
+    // Grafik tıklama olayı
+    if (chart) {
+        chart.subscribeClick((param) => {
+            if (!drawingTool) return;
+            
+            if (!isDrawing) {
+                // Çizim başlat
+                isDrawing = true;
+                startPoint = param.point;
+            } else {
+                // Çizim tamamla
+                isDrawing = false;
+                
+                switch (drawingTool) {
+                    case 'line':
+                        drawLine(startPoint, param.point);
+                        break;
+                    case 'horizontal':
+                        drawHorizontalLine(param.point.price);
+                        break;
+                    case 'vertical':
+                        drawVerticalLine(param.time);
+                        break;
+                    case 'rectangle':
+                        drawRectangle(startPoint, param.point);
+                        break;
+                    case 'fibonacci':
+                        drawFibonacci(startPoint, param.point);
+                        break;
+                    case 'trendline':
+                        drawTrendLine(startPoint, param.point);
+                        break;
+                    case 'pitchfork':
+                        drawPitchfork(startPoint, param.point);
+                        break;
+                    case 'gann':
+                        drawGannFan(startPoint, param.point);
+                        break;
+                    case 'elliott':
+                        drawElliottWave(startPoint, param.point);
+                        break;
+                    case 'text':
+                        drawText(param.point);
+                        break;
+                }
+                
+                // Çizim aracını sıfırla
+                drawingTool = null;
+                document.querySelectorAll('.drawing-tools .btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+            }
+        });
+    }
+
+    // Pencere boyutu değiştiğinde
+    window.addEventListener('resize', () => {
+        if (chart) {
+            chart.applyOptions({
+                width: chartContainer.clientWidth,
+                height: 600
+            });
+        }
+    });
+
+    // İlk yükleme
+    createChart();
+    loadChartData();
+
+    // Alarm ekleme fonksiyonu
+    function addPriceAlert(price, condition) {
+        try {
+            const alertPrice = parseFloat(price);
+            if (isNaN(alertPrice)) {
+                throw new Error('Geçerli bir fiyat giriniz');
+            }
+
+            const alertId = Date.now(); // Benzersiz ID
+            const alert = {
+                id: alertId,
+                price: alertPrice,
+                condition: condition,
+                symbol: '{{ symbol }}',
+                created: new Date().toLocaleString()
+            };
+
+            // Alarmı listeye ekle
+            const alertsList = document.getElementById('alerts-list');
+            const alertElement = document.createElement('div');
+            alertElement.className = 'alert alert-info d-flex justify-content-between align-items-center';
+            alertElement.id = `alert-${alertId}`;
+            alertElement.innerHTML = `
+                <div>
+                    <strong>{{ symbol }}</strong> 
+                    ${condition === 'above' ? '>' : '<'} 
+                    $${alertPrice.toFixed(2)}
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="removeAlert(${alertId})">Sil</button>
+            `;
+            alertsList.appendChild(alertElement);
+
+            // Alarmı grafikte göster
+            if (candlestickSeries) {
+                const marker = {
+                    time: chart.timeScale().getVisibleRange().to,
+                    position: condition === 'above' ? 'aboveBar' : 'belowBar',
+                    color: condition === 'above' ? '#26a69a' : '#ef5350',
+                    shape: 'arrowDown',
+                    text: `$${alertPrice.toFixed(2)}`
+                };
+                candlestickSeries.setMarkers([marker]);
+            }
+
+            // Input alanlarını temizle
+            document.getElementById('alert-price').value = '';
+            document.getElementById('alert-condition').value = 'above';
+
+            // Başarı mesajı göster
+            alert('Fiyat alarmı başarıyla eklendi!');
+        } catch (error) {
+            console.error('Alarm ekleme hatası:', error);
+            alert('Alarm eklenirken bir hata oluştu: ' + error.message);
+        }
+    }
+
+    // Alarm silme fonksiyonu
+    function removeAlert(alertId) {
+        const alertElement = document.getElementById(`alert-${alertId}`);
+        if (alertElement) {
+            alertElement.remove();
+        }
+    }
+
+    // Alarm ekleme butonu
+    document.getElementById('add-alert').addEventListener('click', () => {
+        const price = document.getElementById('alert-price').value;
+        const condition = document.getElementById('alert-condition').value;
+        addPriceAlert(price, condition);
+    });
+
+    // Enter tuşu ile alarm ekleme
+    document.getElementById('alert-price').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const price = e.target.value;
+            const condition = document.getElementById('alert-condition').value;
+            addPriceAlert(price, condition);
+        }
+    });
+});
+</script>
+{% endblock %} 
