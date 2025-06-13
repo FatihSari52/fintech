@@ -22,6 +22,9 @@ from ta.momentum import RSIIndicator
 import requests
 from bs4 import BeautifulSoup
 import random
+from django.core.cache import cache
+from django.conf import settings
+import time
 
 def calculate_rsi(prices, period=14):
     delta = prices.diff()
@@ -262,20 +265,33 @@ def get_yahoo_news():
             try:
                 stock = yf.Ticker(symbol)
                 news = stock.news[:2]  # Her hisse için ilk 2 haber
+                print(f"\n{symbol} için ham haber verisi:")
+                print(news)
                 
                 for item in news:
-                    news_items.append({
-                        'title': item['title'],
-                        'description': f"{symbol} - {item.get('publisher', 'Yahoo Finance')}",
-                        'source': 'Yahoo Finance',
-                        'published_at': datetime.fromtimestamp(item['providerPublishTime']).strftime('%Y-%m-%d %H:%M'),
-                        'url': item['link']
-                    })
-                    print(f"Yahoo Finance haber eklendi: {item['title']}")
+                    try:
+                        print(f"\nHaber öğesi anahtarları: {item.keys()}")
+                        if not all(key in item for key in ['title', 'link', 'providerPublishTime']):
+                            print(f"{symbol} için eksik haber verisi atlandı")
+                            print(f"Mevcut anahtarlar: {list(item.keys())}")
+                            continue
+                            
+                        news_items.append({
+                            'title': item['title'],
+                            'description': f"{symbol} - {item.get('publisher', 'Yahoo Finance')}",
+                            'source': 'Yahoo Finance',
+                            'published_at': datetime.fromtimestamp(item['providerPublishTime']).strftime('%Y-%m-%d %H:%M'),
+                            'url': item['link']
+                        })
+                        print(f"Yahoo Finance haber eklendi: {item['title']}")
+                    except Exception as e:
+                        print(f"{symbol} için haber işlenirken hata: {str(e)}")
+                        continue
             except Exception as e:
                 print(f"{symbol} için haber alınırken hata: {str(e)}")
                 continue
         
+        print(f"\nToplam haber sayısı: {len(news_items)}")
         return news_items
     except Exception as e:
         print(f"Yahoo Finance haberleri alınırken hata: {str(e)}")
@@ -283,33 +299,40 @@ def get_yahoo_news():
 
 @login_required
 def market_view(request):
-    # Örnek piyasa verileri
-    market_data = [
-        {'symbol': 'AAPL', 'company_name': 'Apple Inc.', 'price': 175.50, 'change': 1.2, 'volume': '45.2M', 'market_cap': '2.8T'},
-        {'symbol': 'MSFT', 'company_name': 'Microsoft Corp.', 'price': 380.25, 'change': 0.8, 'volume': '22.1M', 'market_cap': '2.8T'},
-        {'symbol': 'GOOGL', 'company_name': 'Alphabet Inc.', 'price': 140.75, 'change': -0.5, 'volume': '18.5M', 'market_cap': '1.8T'},
-        {'symbol': 'AMZN', 'company_name': 'Amazon.com Inc.', 'price': 175.25, 'change': 1.5, 'volume': '35.8M', 'market_cap': '1.8T'},
-        {'symbol': 'META', 'company_name': 'Meta Platforms Inc.', 'price': 380.50, 'change': 2.1, 'volume': '28.3M', 'market_cap': '950B'},
-    ]
+    # Get market data
+    market_data = get_market_data()
     
-    # Örnek piyasa endeksleri
-    indices = {
-        'sp500_value': '4,783.45',
-        'sp500_change': 1.25,
-        'nasdaq_value': '16,742.38',
-        'nasdaq_change': 1.45,
-        'dow_value': '37,305.16',
-        'dow_change': -0.25
-    }
+    # Get market indices
+    try:
+        sp500 = yf.Ticker("^GSPC")
+        nasdaq = yf.Ticker("^IXIC")
+        dow = yf.Ticker("^DJI")
+        
+        sp500_info = sp500.info
+        nasdaq_info = nasdaq.info
+        dow_info = dow.info
+        
+        context = {
+            'market_data': market_data,
+            'sp500_value': round(sp500_info.get('regularMarketPrice', 0), 2),
+            'sp500_change': round(sp500_info.get('regularMarketChangePercent', 0), 2),
+            'nasdaq_value': round(nasdaq_info.get('regularMarketPrice', 0), 2),
+            'nasdaq_change': round(nasdaq_info.get('regularMarketChangePercent', 0), 2),
+            'dow_value': round(dow_info.get('regularMarketPrice', 0), 2),
+            'dow_change': round(dow_info.get('regularMarketChangePercent', 0), 2),
+        }
+    except Exception as e:
+        print(f"Market indices error: {str(e)}")
+        context = {
+            'market_data': market_data,
+            'sp500_value': 0,
+            'sp500_change': 0,
+            'nasdaq_value': 0,
+            'nasdaq_change': 0,
+            'dow_value': 0,
+            'dow_change': 0,
+        }
     
-    # Yahoo Finance haberlerini al
-    market_news = get_yahoo_news()
-    
-    context = {
-        'market_data': market_data,
-        'market_news': market_news,
-        **indices
-    }
     return render(request, 'finance/market.html', context)
 
 @login_required
@@ -327,16 +350,13 @@ def portfolio_view(request):
         try:
             # Güncel fiyat bilgisini al
             stock = yf.Ticker(holding.symbol)
-            current_price = stock.info.get('currentPrice', 0)
-            
-            # Alım tarihindeki fiyatı al
-            purchase_date = holding.purchase_date
-            hist = stock.history(start=purchase_date, end=purchase_date + timedelta(days=1))
-            purchase_price = hist['Close'].iloc[0] if not hist.empty else holding.average_cost
+            # Günün kapanış fiyatını al
+            hist = stock.history(period='1d')
+            current_price = float(hist['Close'].iloc[-1]) if not hist.empty else float(stock.info.get('currentPrice', 0))
             
             # Değerleri hesapla
-            current_value = holding.shares * current_price
-            cost_basis = holding.shares * purchase_price
+            current_value = float(holding.shares) * current_price
+            cost_basis = float(holding.shares) * float(holding.average_cost)
             profit_loss = current_value - cost_basis
             profit_loss_percentage = (profit_loss / cost_basis) * 100 if cost_basis > 0 else 0
             
@@ -349,7 +369,7 @@ def portfolio_view(request):
             holdings_data.append({
                 'symbol': holding.symbol,
                 'shares': holding.shares,
-                'average_cost': holding.average_cost,
+                'average_cost': float(holding.average_cost),
                 'purchase_date': holding.purchase_date.strftime('%Y-%m-%d'),
                 'current_price': current_price,
                 'current_value': current_value,
@@ -363,7 +383,7 @@ def portfolio_view(request):
     # Portföy dağılımı için veri hazırlama
     distribution = {
         'labels': [holding['symbol'] for holding in holdings_data],
-        'data': [holding['current_value'] for holding in holdings_data]
+        'data': [float(holding['current_value']) for holding in holdings_data]
     }
     
     # Performans verisi için son 30 günlük veri
@@ -377,13 +397,13 @@ def portfolio_view(request):
                 stock = yf.Ticker(holding['symbol'])
                 hist = stock.history(start=date, end=date + timedelta(days=1))
                 if not hist.empty:
-                    price = hist['Close'].iloc[0]
-                    daily_value += holding['shares'] * price
+                    price = float(hist['Close'].iloc[0])
+                    daily_value += float(holding['shares']) * price
             except:
                 continue
         performance_data.append({
             'date': date.strftime('%Y-%m-%d'),
-            'value': daily_value
+            'value': float(daily_value)
         })
     
     performance = {
@@ -395,6 +415,10 @@ def portfolio_view(request):
     daily_change = 0
     if len(performance_data) >= 2 and performance_data[-2]['value'] > 0:
         daily_change = ((performance_data[-1]['value'] - performance_data[-2]['value']) / performance_data[-2]['value']) * 100
+    
+    # Portföy toplam değerini güncelle
+    portfolio.total_value = total_value
+    portfolio.save()
     
     context = {
         'portfolio': {
@@ -413,11 +437,20 @@ def portfolio_view(request):
 @login_required
 def analysis_view(request):
     symbol = request.GET.get('symbol', 'AAPL')
+    cache_key = f'analysis_{symbol}'
+    cached_result = cache.get(cache_key)
+    
+    if cached_result:
+        return render(request, 'finance/analysis.html', cached_result)
     
     try:
-        # Hisse senedi verilerini al
+        # Set timeout for Yahoo Finance API call
         stock = yf.Ticker(symbol)
+        start_time = time.time()
         hist = stock.history(period='1y')
+        
+        if time.time() - start_time > 10:  # 10 second timeout
+            raise Exception('Veri alımı zaman aşımına uğradı.')
         
         if hist.empty:
             raise Exception('Hisse senedi verisi bulunamadı.')
@@ -527,6 +560,9 @@ def analysis_view(request):
             'r2': round((lr_score + rf_score) / 2, 2),
             'price_data': json.dumps(price_data)
         }
+        
+        # Cache the results for 5 minutes
+        cache.set(cache_key, context, 300)
         
         return render(request, 'finance/analysis.html', context)
         
@@ -1194,14 +1230,15 @@ def add_holding(request):
         # Portföye ekle
         holding = StockHolding.objects.create(
             portfolio=request.user.portfolio,
-            symbol=symbol,
-            shares=shares,
-            average_cost=average_cost,
+            symbol=symbol.upper(),
+            shares=int(shares),
+            average_cost=float(average_cost),
             purchase_date=purchase_date
         )
         
         return JsonResponse({'success': True})
     except Exception as e:
+        print(f"Hisse senedi eklenirken hata: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required

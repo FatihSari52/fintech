@@ -165,6 +165,7 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+document.addEventListener('DOMContentLoaded', function() {
     // Portföy dağılımı grafiği
     var distributionCtx = document.getElementById('distributionChart').getContext('2d');
     var distributionChart = new Chart(distributionCtx, {
@@ -188,6 +189,17 @@
             plugins: {
                 legend: {
                     position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            var label = context.label || '';
+                            var value = context.raw || 0;
+                            var total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            var percentage = ((value / total) * 100).toFixed(2);
+                            return label + ': $' + value.toFixed(2) + ' (' + percentage + '%)';
+                        }
+                    }
                 }
             }
         }
@@ -203,65 +215,47 @@
                 label: 'Portföy Değeri',
                 data: {{ portfolio.performance.data|safe }},
                 borderColor: '#36A2EB',
-                tension: 0.1
+                tension: 0.1,
+                fill: false
             }]
         },
         options: {
             responsive: true,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return '$' + context.raw.toFixed(2);
+                        }
+                    }
+                }
+            },
             scales: {
                 y: {
-                    beginAtZero: false
+                    beginAtZero: false,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
                 }
             }
         }
     });
+});
 
-    // Hisse senedi silme fonksiyonu
-    function removeHolding(symbol) {
-        if (confirm('Bu hisse senedini portföyünüzden silmek istediğinizden emin misiniz?')) {
-            fetch('/remove-holding/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({
-                    symbol: symbol
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Hata: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Bir hata oluştu.');
-            });
-        }
-    }
-
-    // Hisse senedi ekleme fonksiyonu
-    function addHolding() {
-        const form = document.getElementById('addStockForm');
-        const formData = new FormData(form);
-        const data = {
-            symbol: formData.get('symbol').toUpperCase(),
-            shares: parseInt(formData.get('shares')),
-            average_cost: parseFloat(formData.get('average_cost')),
-            purchase_date: formData.get('purchase_date')
-        };
-
-        fetch('/add-holding/', {
+// Hisse senedi silme fonksiyonu
+function removeHolding(symbol) {
+    if (confirm('Bu hisse senedini portföyünüzden silmek istediğinizden emin misiniz?')) {
+        fetch('/remove-holding/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify({
+                symbol: symbol
+            })
         })
         .then(response => response.json())
         .then(data => {
@@ -276,48 +270,56 @@
             alert('Bir hata oluştu.');
         });
     }
+}
 
-    // İzleme listesine ekleme fonksiyonu
-    function addToWatchlist(symbol) {
-        fetch('/add-to-watchlist/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                symbol: symbol
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Hisse senedi izleme listesine eklendi.');
-            } else {
-                alert('Hata: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Bir hata oluştu.');
-        });
-    }
+// Hisse senedi ekleme fonksiyonu
+function addHolding() {
+    const form = document.getElementById('addStockForm');
+    const formData = new FormData(form);
+    const data = {
+        symbol: formData.get('symbol').toUpperCase(),
+        shares: parseInt(formData.get('shares')),
+        average_cost: parseFloat(formData.get('average_cost')),
+        purchase_date: formData.get('purchase_date')
+    };
 
-    // CSRF token alma fonksiyonu
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
+    fetch('/add-holding/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Hata: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Bir hata oluştu.');
+    });
+}
+
+// CSRF token alma fonksiyonu
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
             }
         }
-        return cookieValue;
     }
+    return cookieValue;
+}
 </script>
 {% endblock %}
 {% endblock %} 

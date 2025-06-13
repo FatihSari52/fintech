@@ -2,6 +2,38 @@
 
 {% block content %}
 <div class="container py-5">
+    <!-- Hisse Senedi Arama Bölümü -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h3 class="text-center mb-4">Hisse Senedi Analizi</h3>
+                    <form method="get" action="{% url 'stock_predictor' %}" class="row g-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control form-control-lg" 
+                                       name="symbol" placeholder="Hisse senedi sembolü girin (örn: AAPL, MSFT, GOOGL)" 
+                                       required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Analiz Et</button>
+                        </div>
+                    </form>
+                    <div class="mt-3">
+                        <p class="text-muted text-center mb-0">
+                            Popüler hisseler: 
+                            <a href="{% url 'stock_predictor' %}?symbol=AAPL">AAPL</a>, 
+                            <a href="{% url 'stock_predictor' %}?symbol=MSFT">MSFT</a>, 
+                            <a href="{% url 'stock_predictor' %}?symbol=GOOGL">GOOGL</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Piyasa Özeti -->
     <div class="row mb-4">
         <div class="col-md-4">
@@ -92,30 +124,44 @@
         <div class="col-md-12">
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="card-title mb-0">Piyasa Haberleri</h5>
+                    <h5 class="card-title mb-0">Finans Haberleri</h5>
                 </div>
-                <div class="card-body" id="market-news">
-                    {% for news in market_news %}
-                    <div class="mb-3">
-                        <h6 class="mb-1">
-                            <a href="{{ news.url }}" target="_blank" class="text-decoration-none">{{ news.title }}</a>
-                        </h6>
-                        <p class="text-muted small mb-0">
-                            {{ news.description }} | {{ news.published_at }}
-                        </p>
-                    </div>
-                    {% endfor %}
-                </div>
-                <div class="card-footer">
+                <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
-                            <a href="https://www.bloomberg.com/markets" target="_blank" class="btn btn-outline-primary w-100">
-                                <i class="fas fa-external-link-alt"></i> Bloomberg Markets
+                        <div class="col-md-4 mb-3">
+                            <a href="https://www.bloomberg.com/markets" target="_blank" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                <i class="fas fa-newspaper fa-2x mb-2"></i>
+                                <span>Bloomberg Markets</span>
                             </a>
                         </div>
-                        <div class="col-md-6">
-                            <a href="https://www.cnbc.com/markets/" target="_blank" class="btn btn-outline-danger w-100">
-                                <i class="fas fa-external-link-alt"></i> CNBC Markets
+                        <div class="col-md-4 mb-3">
+                            <a href="https://www.cnbc.com/markets/" target="_blank" class="btn btn-outline-danger w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                <i class="fas fa-chart-line fa-2x mb-2"></i>
+                                <span>CNBC Markets</span>
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="https://finance.yahoo.com/news/" target="_blank" class="btn btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                <i class="fas fa-globe fa-2x mb-2"></i>
+                                <span>Yahoo Finance</span>
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="https://www.reuters.com/markets/" target="_blank" class="btn btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                                <span>Reuters Markets</span>
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="https://www.marketwatch.com/" target="_blank" class="btn btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                <i class="fas fa-search-dollar fa-2x mb-2"></i>
+                                <span>MarketWatch</span>
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="https://www.ft.com/markets" target="_blank" class="btn btn-outline-dark w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                <i class="fas fa-landmark fa-2x mb-2"></i>
+                                <span>Financial Times</span>
                             </a>
                         </div>
                     </div>
@@ -125,34 +171,4 @@
     </div>
 </div>
 
-{% block extra_js %}
-<script>
-function updateNews() {
-    fetch('/get-market-news/')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const newsContainer = document.getElementById('market-news');
-                newsContainer.innerHTML = data.news.map(news => `
-                    <div class="mb-3">
-                        <h6 class="mb-1">
-                            <a href="${news.url}" target="_blank" class="text-decoration-none">${news.title}</a>
-                        </h6>
-                        <p class="text-muted small mb-0">
-                            ${news.description} | ${news.published_at}
-                        </p>
-                    </div>
-                `).join('');
-            }
-        })
-        .catch(error => console.error('Haberler güncellenirken hata oluştu:', error));
-}
-
-// Sayfa yüklendiğinde ve her 5 dakikada bir haberleri güncelle
-document.addEventListener('DOMContentLoaded', () => {
-    updateNews();
-    setInterval(updateNews, 300000); // 5 dakika = 300000 ms
-});
-</script>
-{% endblock %}
 {% endblock %} 
